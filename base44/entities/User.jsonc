@@ -1,0 +1,67 @@
+{
+  "name": "User",
+  "type": "object",
+  "properties": {
+    "role": {
+      "type": "string",
+      "enum": [
+        "user",
+        "admin"
+      ],
+      "default": "user"
+    },
+    "phone": {
+      "type": "string",
+      "description": "Nigerian phone number +234..."
+    },
+    "wallet_balance": {
+      "type": "number",
+      "default": 0
+    },
+    "pending_escrow": {
+      "type": "number",
+      "default": 0
+    },
+    "total_received": {
+      "type": "number",
+      "default": 0
+    },
+    "total_paid": {
+      "type": "number",
+      "default": 0
+    },
+    "kyc_status": {
+      "type": "string",
+      "enum": [
+        "Unverified",
+        "Pending",
+        "Verified",
+        "Failed"
+      ],
+      "default": "Unverified"
+    },
+    "kyc_method": {
+      "type": "string",
+      "enum": [
+        "NIN",
+        "BVN"
+      ]
+    },
+    "kyc_submitted_value": {
+      "type": "string",
+      "description": "Masked NIN/BVN for display"
+    },
+    "kyc_verified_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "ACTIVE",
+        "SUSPENDED"
+      ],
+      "default": "ACTIVE"
+    }
+  }
+}

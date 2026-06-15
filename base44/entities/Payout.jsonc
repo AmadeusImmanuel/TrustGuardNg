@@ -1,0 +1,48 @@
+{
+  "name": "Payout",
+  "type": "object",
+  "properties": {
+    "user_id": {
+      "type": "string"
+    },
+    "user_name": {
+      "type": "string"
+    },
+    "user_email": {
+      "type": "string"
+    },
+    "bank_name": {
+      "type": "string"
+    },
+    "account_number": {
+      "type": "string"
+    },
+    "account_name": {
+      "type": "string"
+    },
+    "amount": {
+      "type": "number"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Initiated",
+        "Processing",
+        "Completed",
+        "Failed"
+      ],
+      "default": "Initiated"
+    },
+    "gateway_reference": {
+      "type": "string"
+    },
+    "failure_reason": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "bank_name",
+    "account_number",
+    "amount"
+  ]
+}

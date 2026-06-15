@@ -1,0 +1,63 @@
+{
+  "name": "Dispute",
+  "type": "object",
+  "properties": {
+    "trade_id": {
+      "type": "string",
+      "description": "Reference to Trade ID"
+    },
+    "trade_reference": {
+      "type": "string"
+    },
+    "raised_by_id": {
+      "type": "string",
+      "description": "User ID who raised the dispute"
+    },
+    "raised_by_name": {
+      "type": "string"
+    },
+    "raised_by_role": {
+      "type": "string",
+      "enum": [
+        "buyer",
+        "seller"
+      ]
+    },
+    "description": {
+      "type": "string",
+      "description": "Description of the issue"
+    },
+    "evidence_text": {
+      "type": "string",
+      "description": "Supporting evidence text"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "OPEN",
+        "UNDER_REVIEW",
+        "RESOLVED"
+      ],
+      "default": "OPEN"
+    },
+    "admin_notes": {
+      "type": "string"
+    },
+    "ruling_choice": {
+      "type": "string",
+      "enum": [
+        "REFUND_TO_BUYER",
+        "RELEASE_TO_SELLER",
+        "PARTIAL_SPLIT"
+      ]
+    },
+    "ruling_split_percentage": {
+      "type": "number",
+      "description": "Seller gets X% if PARTIAL_SPLIT"
+    }
+  },
+  "required": [
+    "trade_id",
+    "description"
+  ]
+}

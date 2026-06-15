@@ -1,0 +1,59 @@
+{
+  "name": "Transaction",
+  "type": "object",
+  "properties": {
+    "trade_id": {
+      "type": "string"
+    },
+    "trade_reference": {
+      "type": "string"
+    },
+    "user_id": {
+      "type": "string"
+    },
+    "user_name": {
+      "type": "string"
+    },
+    "amount": {
+      "type": "number"
+    },
+    "fee_collected": {
+      "type": "number",
+      "default": 0
+    },
+    "type": {
+      "type": "string",
+      "enum": [
+        "Escrow_Inflow",
+        "Manual_Release",
+        "Auto_Release_Payout",
+        "Payout_Withdrawal",
+        "Dispute_Refund",
+        "Dispute_Release"
+      ]
+    },
+    "direction": {
+      "type": "string",
+      "enum": [
+        "credit",
+        "debit"
+      ]
+    },
+    "description": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "completed",
+        "pending",
+        "failed"
+      ],
+      "default": "completed"
+    }
+  },
+  "required": [
+    "amount",
+    "type"
+  ]
+}

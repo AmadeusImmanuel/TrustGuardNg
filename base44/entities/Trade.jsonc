@@ -1,0 +1,127 @@
+{
+  "name": "Trade",
+  "type": "object",
+  "properties": {
+    "buyer_id": {
+      "type": "string",
+      "description": "User ID of the buyer"
+    },
+    "buyer_email": {
+      "type": "string",
+      "description": "Email of buyer"
+    },
+    "buyer_name": {
+      "type": "string",
+      "description": "Name of buyer"
+    },
+    "seller_id": {
+      "type": "string",
+      "description": "User ID of the seller"
+    },
+    "seller_email": {
+      "type": "string",
+      "description": "Email/phone of seller to invite"
+    },
+    "seller_name": {
+      "type": "string",
+      "description": "Name of seller"
+    },
+    "item_name": {
+      "type": "string",
+      "description": "Name of item being traded"
+    },
+    "item_description": {
+      "type": "string",
+      "description": "Description of the item"
+    },
+    "amount": {
+      "type": "number",
+      "description": "Trade amount in Naira"
+    },
+    "calculated_fee": {
+      "type": "number",
+      "description": "Escrow fee in Naira"
+    },
+    "fee_payer": {
+      "type": "string",
+      "enum": [
+        "BUYER",
+        "SELLER",
+        "SPLIT_50_50"
+      ],
+      "default": "BUYER",
+      "description": "Who pays the escrow fee"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "Draft",
+        "Awaiting_Payment",
+        "Funded",
+        "Shipped",
+        "Confirmed",
+        "Disputed",
+        "Resolved"
+      ],
+      "default": "Awaiting_Payment"
+    },
+    "virtual_bank_name": {
+      "type": "string",
+      "description": "Bank name for virtual account"
+    },
+    "virtual_account_number": {
+      "type": "string",
+      "description": "Generated virtual account number"
+    },
+    "virtual_account_expires_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "dispatch_company": {
+      "type": "string"
+    },
+    "rider_name": {
+      "type": "string"
+    },
+    "rider_phone": {
+      "type": "string"
+    },
+    "tracking_code": {
+      "type": "string"
+    },
+    "delivery_deadline": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "funded_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "shipped_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "auto_release_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "shippedAt + 48 hours"
+    },
+    "confirmed_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "is_auto_released": {
+      "type": "boolean",
+      "default": false
+    },
+    "reference": {
+      "type": "string",
+      "description": "Unique trade reference"
+    }
+  },
+  "required": [
+    "item_name",
+    "amount",
+    "seller_email"
+  ]
+}

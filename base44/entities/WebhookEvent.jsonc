@@ -1,0 +1,44 @@
+{
+  "name": "WebhookEvent",
+  "type": "object",
+  "properties": {
+    "gateway": {
+      "type": "string",
+      "description": "e.g. Monnify, Korapay"
+    },
+    "trade_id": {
+      "type": "string"
+    },
+    "trade_reference": {
+      "type": "string"
+    },
+    "account_number": {
+      "type": "string"
+    },
+    "amount": {
+      "type": "number"
+    },
+    "event_type": {
+      "type": "string"
+    },
+    "status": {
+      "type": "string",
+      "enum": [
+        "success",
+        "failed",
+        "duplicate",
+        "ignored"
+      ],
+      "default": "success"
+    },
+    "raw_payload": {
+      "type": "string",
+      "description": "JSON stringified raw payload"
+    }
+  },
+  "required": [
+    "gateway",
+    "event_type",
+    "status"
+  ]
+}
