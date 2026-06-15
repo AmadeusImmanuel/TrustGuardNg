@@ -29,7 +29,7 @@ export default function FeeCalculator() {
   }
 
   const fmt = (v) =>
-    v ? "₦" + v.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "₦0.00";
+    (v && !isNaN(v)) ? "₦" + v.toLocaleString("en-NG", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) : "₦0.00";
 
   return (
     <section id="calculator" className="py-24 bg-white">

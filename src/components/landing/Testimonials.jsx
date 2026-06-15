@@ -37,29 +37,41 @@ export default function Testimonials() {
             Real traders. Real results.
           </h2>
         </div>
-        <div className="grid md:grid-cols-3 gap-8">
-          {testimonials.map((t) => (
-            <div key={t.name} className="bg-white rounded-2xl p-8 border border-gray-100 shadow-sm hover:shadow-md transition-all">
-              <div className="flex gap-1 mb-4">
-                {Array(t.stars).fill(0).map((_, i) => (
-                  <Star key={i} className="w-4 h-4 fill-current" style={{ color: "#00A651" }} />
-                ))}
-              </div>
-              <p className="text-gray-700 leading-relaxed mb-6 text-sm italic">"{t.quote}"</p>
-              <div className="flex items-center gap-3">
-                <div
-                  className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm"
-                  style={{ background: "#0D1F3C" }}
-                >
-                  {t.avatar}
-                </div>
+        <div className="grid md:grid-cols-3 gap-8 items-stretch">
+          {testimonials.map((t) => {
+            const isVerified = t.name === "Adaeze Okonkwo" || t.name === "Fatima Usman";
+            return (
+              <div key={t.name} className="bg-white rounded-2xl p-8 border border-gray-100 shadow-sm hover:shadow-md transition-all flex flex-col justify-between h-full">
                 <div>
-                  <div className="font-semibold text-[#0D1F3C] text-sm">{t.name}</div>
-                  <div className="text-gray-500 text-xs">{t.role}</div>
+                  <div className="flex gap-1 mb-4">
+                    {Array(t.stars).fill(0).map((_, i) => (
+                      <Star key={i} className="w-4 h-4 fill-current" style={{ color: "#00A651" }} />
+                    ))}
+                  </div>
+                  <p className="text-gray-700 leading-relaxed mb-6 text-sm italic">"{t.quote}"</p>
+                </div>
+                <div className="flex items-center gap-3">
+                  <div
+                    className="w-10 h-10 rounded-full flex items-center justify-center text-white font-bold text-sm shrink-0"
+                    style={{ background: "#0D1F3C" }}
+                  >
+                    {t.avatar}
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-semibold text-[#0D1F3C] text-sm">{t.name}</span>
+                      {isVerified && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold" style={{ background: "#f0fff7", color: "#00A651" }}>
+                          ✓ Verified Merchant
+                        </span>
+                      )}
+                    </div>
+                    <div className="text-gray-500 text-xs">{t.role}</div>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>

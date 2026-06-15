@@ -46,8 +46,7 @@ export default function Landing() {
 
           <p className="text-xl text-white/70 max-w-2xl mx-auto mb-12 leading-relaxed">
             TrustGuard holds your payment securely until you confirm delivery.
-            Powered by real-time bank transfers — no card failures, no scams,
-            no disputes left unresolved.
+            Powered by instant bank transfers — no card details or banking passwords required.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">

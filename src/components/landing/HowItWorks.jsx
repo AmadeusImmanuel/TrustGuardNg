@@ -27,7 +27,7 @@ const steps = [
 
 export default function HowItWorks() {
   return (
-    <section id="how-it-works" className="py-24 bg-white">
+    <section id="how-it-works" className="pt-20 md:pt-28 pb-24 bg-white">
       <div className="max-w-6xl mx-auto px-6">
         <div className="text-center mb-16">
           <div className="inline-block px-4 py-1.5 rounded-full text-sm font-semibold mb-4 text-white" style={{ background: "#00A651" }}>
@@ -59,10 +59,20 @@ export default function HowItWorks() {
                   <span className="text-4xl font-black text-gray-100">{step.number}</span>
                 </div>
                 <h3 className="text-xl font-bold text-[#0D1F3C] mb-3">{step.title}</h3>
-                <p className="text-gray-500 leading-relaxed text-sm">{step.desc}</p>
+                <p className="text-gray-600 leading-relaxed text-sm">{step.desc}</p>
               </div>
             </div>
           ))}
+        </div>
+
+        <div className="text-center mt-12">
+          <a
+            href="/register"
+            className="inline-block px-8 py-4 rounded-full text-white font-semibold text-base transition-all hover:opacity-90 hover:scale-105 shadow-lg"
+            style={{ background: "#00A651" }}
+          >
+            Create a Secure Link Now →
+          </a>
         </div>
       </div>
     </section>
