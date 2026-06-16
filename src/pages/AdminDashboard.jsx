@@ -2,11 +2,17 @@ import React, { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import AppLayout from "@/components/AppLayout";
+import TradeVolumeChart from "@/components/admin/TradeVolumeChart";
+import DisputeRateChart from "@/components/admin/DisputeRateChart";
+import TransactionTrendChart from "@/components/admin/TransactionTrendChart";
 import { Users, ArrowLeftRight, AlertTriangle, Wallet, TrendingUp, Activity } from "lucide-react";
 
 export default function AdminDashboard() {
   const [user, setUser] = useState(null);
   const [stats, setStats] = useState({ users: 0, trades: 0, disputes: 0, webhooks: 0, volume: 0, fees: 0 });
+  const [trades, setTrades] = useState([]);
+  const [disputes, setDisputes] = useState([]);
+  const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -14,16 +20,19 @@ export default function AdminDashboard() {
       const u = await base44.auth.me();
       if (u?.role !== "admin") { window.location.href = "/dashboard"; return; }
       setUser(u);
-      const [users, trades, disputes, webhooks, transactions] = await Promise.all([
+      const [users, tradesData, disputesData, webhooks, txns] = await Promise.all([
         base44.entities.User.list(),
-        base44.entities.Trade.list(),
-        base44.entities.Dispute.list(),
+        base44.entities.Trade.list("-created_date", 200),
+        base44.entities.Dispute.list("-created_date", 200),
         base44.entities.WebhookEvent.list(),
-        base44.entities.Transaction.list(),
+        base44.entities.Transaction.list("-created_date", 200),
       ]);
-      const volume = trades.reduce((s, t) => s + (t.amount || 0), 0);
-      const fees = transactions.reduce((s, t) => s + (t.fee_collected || 0), 0);
-      setStats({ users: users.length, trades: trades.length, disputes: disputes.length, webhooks: webhooks.length, volume, fees });
+      const volume = tradesData.reduce((s, t) => s + (t.amount || 0), 0);
+      const fees = txns.reduce((s, t) => s + (t.fee_collected || 0), 0);
+      setStats({ users: users.length, trades: tradesData.length, disputes: disputesData.length, webhooks: webhooks.length, volume, fees });
+      setTrades(tradesData);
+      setDisputes(disputesData);
+      setTransactions(txns);
       setLoading(false);
     })();
   }, []);
@@ -51,7 +60,7 @@ export default function AdminDashboard() {
 
   return (
     <AppLayout user={user}>
-      <div className="max-w-5xl mx-auto px-4 md:px-8 py-8">
+      <div className="max-w-6xl mx-auto px-4 md:px-8 py-8">
         <div className="mb-8">
           <div className="inline-block px-3 py-1 rounded-full text-xs font-bold text-white mb-3" style={{ background: "#00A651" }}>
             Admin
@@ -60,6 +69,7 @@ export default function AdminDashboard() {
           <p className="text-gray-500 text-sm mt-1">TrustGuard Nigeria admin dashboard</p>
         </div>
 
+        {/* Stat Cards */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-8">
           {cards.map((c) => (
             <Link
@@ -76,6 +86,16 @@ export default function AdminDashboard() {
           ))}
         </div>
 
+        {/* Charts */}
+        <div className="mb-6">
+          <TradeVolumeChart trades={trades} />
+        </div>
+        <div className="grid md:grid-cols-2 gap-6 mb-6">
+          <DisputeRateChart trades={trades} disputes={disputes} />
+          <TransactionTrendChart transactions={transactions} />
+        </div>
+
+        {/* Quick Links */}
         <div className="grid md:grid-cols-2 gap-4">
           <Link to="/admin/disputes" className="bg-white rounded-2xl border border-gray-100 p-5 hover:shadow-md transition-all">
             <h3 className="font-bold text-[#0D1F3C] mb-1">Dispute Center</h3>

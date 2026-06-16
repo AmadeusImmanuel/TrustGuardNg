@@ -31,6 +31,14 @@ export default function TradeDetail() {
   const isBuyer = trade?.buyer_id === user?.id;
   const isSeller = trade?.seller_id === user?.id;
 
+  const sendNotification = async (tradeId, newStatus) => {
+    try {
+      await base44.functions.invoke("tradeStatusNotification", { trade_id: tradeId, new_status: newStatus });
+    } catch (e) {
+      console.error("Notification failed:", e);
+    }
+  };
+
   const markShipped = async () => {
     if (!window.confirm("Confirm you have shipped this item?")) return;
     setActionLoading(true);
@@ -42,6 +50,7 @@ export default function TradeDetail() {
       auto_release_at: autoRelease,
     });
     setTrade(updated);
+    await sendNotification(trade.id, "Shipped");
     setActionLoading(false);
   };
 
@@ -64,6 +73,7 @@ export default function TradeDetail() {
       status: "completed",
     });
     setTrade(updated);
+    await sendNotification(trade.id, "Confirmed");
     setActionLoading(false);
   };
 
@@ -82,6 +92,7 @@ export default function TradeDetail() {
     });
     const updated = await base44.entities.Trade.update(trade.id, { status: "Disputed" });
     setTrade(updated);
+    await sendNotification(trade.id, "Disputed");
     setShowDispute(false);
     setActionLoading(false);
   };
@@ -332,6 +343,9 @@ function ShipForm({ trade, onShipped }) {
       tracking_code: form.tracking_code,
     });
     onShipped(updated);
+    try {
+      await base44.functions.invoke("tradeStatusNotification", { trade_id: trade.id, new_status: "Shipped" });
+    } catch (e) { console.error(e); }
     setLoading(false);
   };
 
