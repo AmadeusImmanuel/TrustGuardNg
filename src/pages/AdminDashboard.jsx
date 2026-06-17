@@ -5,6 +5,7 @@ import AppLayout from "@/components/AppLayout";
 import TradeVolumeChart from "@/components/admin/TradeVolumeChart";
 import DisputeRateChart from "@/components/admin/DisputeRateChart";
 import TransactionTrendChart from "@/components/admin/TransactionTrendChart";
+import DailyEscrowVolumeChart from "@/components/admin/DailyEscrowVolumeChart";
 import { Users, ArrowLeftRight, AlertTriangle, Wallet, TrendingUp, Activity } from "lucide-react";
 
 export default function AdminDashboard() {
@@ -87,6 +88,9 @@ export default function AdminDashboard() {
         </div>
 
         {/* Charts */}
+        <div className="mb-6">
+          <DailyEscrowVolumeChart trades={trades} />
+        </div>
         <div className="mb-6">
           <TradeVolumeChart trades={trades} />
         </div>
