@@ -5,7 +5,7 @@ import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/trades/StatusBadge";
 import VirtualBankCard from "@/components/trades/VirtualBankCard";
 import AutoReleaseTimer from "@/components/trades/AutoReleaseTimer";
-import { Package, CheckCircle, AlertTriangle, Copy, ChevronLeft } from "lucide-react";
+import { Package, CheckCircle, AlertTriangle, Copy, ChevronLeft, CreditCard } from "lucide-react";
 import { jsPDF } from "jspdf";
 
 export default function TradeDetail() {
@@ -17,6 +17,30 @@ export default function TradeDetail() {
   const [actionLoading, setActionLoading] = useState(false);
   const [showDispute, setShowDispute] = useState(false);
   const [dispForm, setDispForm] = useState({ description: "", evidence_text: "" });
+  const [paymentStatus, setPaymentStatus] = useState(null);
+  const [stripeLoading, setStripeLoading] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const status = params.get("payment");
+    if (status === "success" || status === "cancelled") {
+      setPaymentStatus(status);
+      // Clean URL
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
+
+  const handleStripePay = async () => {
+    setStripeLoading(true);
+    const res = await base44.functions.invoke("createStripeCheckout", { trade_id: trade.id });
+    const url = res.data?.url;
+    if (url) {
+      window.location.href = url;
+    } else {
+      alert("Could not load payment page. Please try again.");
+      setStripeLoading(false);
+    }
+  };
 
   useEffect(() => {
     (async () => {
@@ -158,6 +182,20 @@ export default function TradeDetail() {
   return (
     <AppLayout user={user}>
       <div className="max-w-2xl mx-auto px-4 py-8">
+        {/* Payment status banner */}
+        {paymentStatus === "success" && (
+          <div className="mb-4 px-5 py-4 rounded-2xl text-white flex items-center gap-3" style={{ background: "#00A651" }}>
+            <CheckCircle className="w-5 h-5 shrink-0" />
+            <div className="text-sm font-semibold">Payment successful! Your funds are now held securely in escrow. The seller will be notified to ship your item.</div>
+          </div>
+        )}
+        {paymentStatus === "cancelled" && (
+          <div className="mb-4 px-5 py-4 rounded-2xl bg-amber-50 border border-amber-200 flex items-center gap-3">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0" />
+            <div className="text-sm font-semibold text-amber-800">Payment was cancelled. You can try again or use bank transfer instead.</div>
+          </div>
+        )}
+
         {/* Back */}
         <button
           onClick={() => navigate("/trades")}
@@ -174,6 +212,51 @@ export default function TradeDetail() {
           </div>
           <StatusBadge status={trade.status} />
         </div>
+
+        {/* Stripe card payment for awaiting payment */}
+        {trade.status === "Awaiting_Payment" && isBuyer && (
+          <div className="mb-4">
+            <div className="rounded-2xl border-2 border-green-200 bg-white p-5 shadow-sm">
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "#f0fff7" }}>
+                  <CreditCard className="w-5 h-5 text-green-600" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-[#0D1F3C]">Pay with Card</h3>
+                  <p className="text-gray-500 text-xs">Instant • Visa, Mastercard, Verve</p>
+                </div>
+              </div>
+              <button
+                onClick={() => {
+                  if (window !== window.top) {
+                    alert("Card payment only works from the published app. Please open this page outside the preview.");
+                    return;
+                  }
+                  handleStripePay();
+                }}
+                disabled={stripeLoading}
+                className="w-full py-3 rounded-xl text-white font-bold text-sm disabled:opacity-60 flex items-center justify-center gap-2"
+                style={{ background: "#00A651" }}
+              >
+                {stripeLoading ? (
+                  <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing...</>
+                ) : (
+                  <><CreditCard className="w-4 h-4" /> Pay {(() => {
+                    const fp = trade.fee_payer || "BUYER";
+                    const f = (trade.amount || 0) * 0.015;
+                    const total = fp === "BUYER" ? trade.amount + f : fp === "SPLIT_50_50" ? trade.amount + f/2 : trade.amount;
+                    return "₦" + total.toLocaleString("en-NG", { minimumFractionDigits: 2 });
+                  })()} Now</>
+                )}
+              </button>
+            </div>
+            <div className="flex items-center gap-3 my-4">
+              <div className="flex-1 h-px bg-gray-200" />
+              <span className="text-xs text-gray-400 font-semibold">OR BANK TRANSFER</span>
+              <div className="flex-1 h-px bg-gray-200" />
+            </div>
+          </div>
+        )}
 
         {/* Virtual bank card for awaiting payment */}
         {trade.status === "Awaiting_Payment" && isBuyer && (

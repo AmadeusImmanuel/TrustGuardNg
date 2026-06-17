@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { base44 } from "@/api/base44Client";
 import AppLayout from "@/components/AppLayout";
-import { Info } from "lucide-react";
+import { Info, CreditCard, Building2, ExternalLink } from "lucide-react";
 
 const FEE_RATE = 0.015;
 const BANKS = ["Sterling Bank", "Wema Bank", "Moniepoint", "GTBank", "First Bank", "Zenith Bank", "Access Bank", "UBA"];
@@ -21,6 +21,7 @@ export default function NewTrade() {
   const [loading, setLoading] = useState(false);
   const [step, setStep] = useState(1);
   const [createdTrade, setCreatedTrade] = useState(null);
+  const [stripeLoading, setStripeLoading] = useState(false);
 
   const [form, setForm] = useState({
     item_name: "",
@@ -88,10 +89,24 @@ export default function NewTrade() {
     setLoading(false);
   };
 
+  const handleStripePay = async () => {
+    setStripeLoading(true);
+    const res = await base44.functions.invoke("createStripeCheckout", { trade_id: createdTrade.id });
+    const url = res.data?.url;
+    if (url) {
+      // Open Stripe checkout (works from published app)
+      window.location.href = url;
+    } else {
+      alert("Could not load payment page. Please try again.");
+      setStripeLoading(false);
+    }
+  };
+
   const fmt = (v) => "₦" + (v || 0).toLocaleString("en-NG", { minimumFractionDigits: 2 });
 
   if (step === 2 && createdTrade) {
     const expires = new Date(createdTrade.virtual_account_expires_at);
+    const isIframe = window !== window.top;
     return (
       <AppLayout user={user}>
         <div className="max-w-lg mx-auto px-4 py-10">
@@ -100,11 +115,62 @@ export default function NewTrade() {
               <span className="text-3xl">✅</span>
             </div>
             <h1 className="text-2xl font-black text-[#0D1F3C]">Trade Created!</h1>
-            <p className="text-gray-500 text-sm mt-2">Transfer funds to the account below to activate escrow.</p>
+            <p className="text-gray-500 text-sm mt-2">Choose how you want to fund this escrow.</p>
+          </div>
+
+          {/* Stripe Card Payment */}
+          <div className="rounded-2xl border-2 border-green-200 bg-white p-6 mb-4 shadow-sm">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "#f0fff7" }}>
+                <CreditCard className="w-5 h-5 text-green-600" />
+              </div>
+              <div>
+                <h3 className="font-bold text-[#0D1F3C]">Pay with Card</h3>
+                <p className="text-gray-500 text-xs">Instant • Visa, Mastercard, Verve</p>
+              </div>
+              <div className="ml-auto px-2 py-0.5 rounded-full text-xs font-bold text-white" style={{ background: "#00A651" }}>
+                FASTEST
+              </div>
+            </div>
+            <div className="bg-gray-50 rounded-xl p-3 mb-4">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-500">You'll pay</span>
+                <span className="font-bold text-[#0D1F3C]">{fmt(buyerPays)}</span>
+              </div>
+            </div>
+            <button
+              onClick={() => {
+                if (isIframe) {
+                  alert("Card payment only works from the published app. Please open this page outside the preview.");
+                  return;
+                }
+                handleStripePay();
+              }}
+              disabled={stripeLoading}
+              className="w-full py-3 rounded-xl text-white font-bold text-sm disabled:opacity-60 flex items-center justify-center gap-2"
+              style={{ background: "#00A651" }}
+            >
+              {stripeLoading ? (
+                <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Processing...</>
+              ) : (
+                <><CreditCard className="w-4 h-4" /> Pay with Card Now</>
+              )}
+            </button>
+          </div>
+
+          {/* Divider */}
+          <div className="flex items-center gap-3 my-6">
+            <div className="flex-1 h-px bg-gray-200" />
+            <span className="text-xs text-gray-400 font-semibold">OR PAY VIA BANK TRANSFER</span>
+            <div className="flex-1 h-px bg-gray-200" />
           </div>
 
           {/* Virtual Bank Card */}
-          <div className="rounded-2xl text-white p-6 mb-6 shadow-xl" style={{ background: "linear-gradient(135deg, #0D1F3C 0%, #163560 100%)" }}>
+          <div className="rounded-2xl text-white p-6 mb-6 shadow-xl border border-white/10" style={{ background: "linear-gradient(135deg, #0D1F3C 0%, #163560 100%)" }}>
+            <div className="flex items-center gap-2 mb-4">
+              <Building2 className="w-4 h-4 text-white/50" />
+              <span className="text-white/50 text-xs uppercase tracking-widest">Bank Transfer Details</span>
+            </div>
             <div className="flex items-center justify-between mb-6">
               <div>
                 <div className="text-white/50 text-xs uppercase tracking-widest">Trade Reference</div>
