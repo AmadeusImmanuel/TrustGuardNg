@@ -17,9 +17,21 @@ const pool = new Pool({
   password: process.env.DB_PASSWORD || "postgres",
 });
 
-pool.connect((err) => {
+pool.connect((err, client) => {
   if (err) { console.error("DB connection failed:", err.message); process.exit(1); }
   console.log("PostgreSQL connected");
+  console.log("DEBUG -> DB_HOST:", process.env.DB_HOST);
+  console.log("DEBUG -> DB_NAME:", process.env.DB_NAME);
+  console.log("DEBUG -> DB_USER:", process.env.DB_USER);
+  client.query("SELECT current_database(), current_user", (qerr, qres) => {
+    if (qerr) console.error("DEBUG query error:", qerr.message);
+    else console.log("DEBUG -> actually connected to:", qres.rows[0]);
+    client.query("SELECT table_name FROM information_schema.tables WHERE table_schema='public'", (terr, tres) => {
+      if (terr) console.error("DEBUG table list error:", terr.message);
+      else console.log("DEBUG -> tables visible:", tres.rows.map(r => r.table_name));
+      client.release();
+    });
+  });
 });
 
 const authenticate = (req, res, next) => {
