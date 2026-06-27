@@ -18,7 +18,7 @@ export default function DailyEscrowVolumeChart({ trades }) {
     const d = new Date(t.created_date);
     const key = d.toLocaleDateString("en-NG", { month: "short", day: "numeric" });
     if (!days[key]) return;
-    days[key].volume += t.amount || 0;
+    days[key].volume += Number(t.amount) || 0;
     if (["Draft", "Awaiting_Payment", "Funded", "Shipped", "Disputed"].includes(t.status)) {
       days[key].active += 1;
     }

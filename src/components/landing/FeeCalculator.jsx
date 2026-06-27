@@ -1,14 +1,16 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Calculator } from "lucide-react";
-
-const FEE_RATE = 0.015;
+import { platformSettings } from "@/api/base44Client";
 
 export default function FeeCalculator() {
   const [amount, setAmount] = useState("");
   const [feePayer, setFeePayer] = useState("BUYER");
+  const [feeRate, setFeeRate] = useState(0.015);
+
+  useEffect(() => { platformSettings.getFeeRate().then((r) => setFeeRate(r.fee_rate)).catch(() => {}); }, []);
 
   const numAmount = parseFloat(amount.replace(/,/g, "")) || 0;
-  const fee = numAmount * FEE_RATE;
+  const fee = numAmount * feeRate;
 
   let buyerPays = 0;
   let sellerReceives = 0;
@@ -39,7 +41,7 @@ export default function FeeCalculator() {
             <Calculator className="w-6 h-6" style={{ color: "#00A651" }} />
           </div>
           <h2 className="text-4xl font-black text-[#0D1F3C] mb-3">Fee Calculator</h2>
-          <p className="text-gray-500">See exactly what you pay — 1.5% flat, always transparent.</p>
+          <p className="text-gray-500">See exactly what you pay — {(feeRate * 100).toFixed(1)}% flat, always transparent.</p>
         </div>
 
         <div className="bg-white rounded-2xl border border-gray-100 shadow-lg p-8">
@@ -77,7 +79,7 @@ export default function FeeCalculator() {
           {/* Results */}
           <div className="space-y-3">
             <div className="flex justify-between items-center py-3 border-t border-gray-100">
-              <span className="text-gray-500 text-sm">Platform Fee (1.5%)</span>
+              <span className="text-gray-500 text-sm">Platform Fee ({(feeRate * 100).toFixed(1)}%)</span>
               <span className="font-bold text-[#0D1F3C]">{fmt(fee)}</span>
             </div>
             <div className="flex justify-between items-center py-3 border-t border-gray-100">

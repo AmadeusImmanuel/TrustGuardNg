@@ -1,76 +1,64 @@
 import React, { useState } from "react";
 import { Link } from "react-router-dom";
-import { base44 } from "@/api/base44Client";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Mail, ArrowLeft, Loader2 } from "lucide-react";
-import AuthLayout from "@/components/AuthLayout";
+import { auth } from "@/api/base44Client";
 
 export default function ForgotPassword() {
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
   const [sent, setSent] = useState(false);
+  const [error, setError] = useState("");
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setLoading(true);
+    setError("");
     try {
-      await base44.auth.resetPasswordRequest(email);
-    } catch {
-      // Always show success regardless
-    } finally {
-      setLoading(false);
+      await auth.forgotPassword(email);
       setSent(true);
+    } catch (err) {
+      setError(err.message || "Something went wrong");
     }
+    setLoading(false);
   };
 
   return (
-    <AuthLayout
-      icon={Mail}
-      title="Reset password"
-      subtitle="We'll send you a link to reset it"
-      footer={
-        <Link to="/login" className="text-primary font-medium hover:underline">
-          <ArrowLeft className="w-3 h-3 inline mr-1" />Back to log in
-        </Link>
-      }
-    >
-      {sent ? (
-        <p className="text-sm text-foreground text-center">
-          If an account exists with that email, you'll receive a password reset link shortly.
-        </p>
-      ) : (
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="space-y-2">
-            <Label htmlFor="email">Email address</Label>
-            <div className="relative">
-              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" aria-hidden="true" />
-              <Input
-                id="email"
-                type="email"
-                autoComplete="email"
-                autoFocus
-                placeholder="you@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="pl-10 h-12"
-                required
-              />
+    <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#0D1F3C" }}>
+      <div className="w-full max-w-md">
+        <div className="text-center mb-8">
+          <h1 className="text-3xl font-black text-white">TrustGuard</h1>
+          <p className="text-white/50 text-sm mt-2">Reset your password</p>
+        </div>
+        <div className="bg-white rounded-2xl p-8 shadow-xl">
+          {sent ? (
+            <div className="text-center py-4">
+              <div className="text-4xl mb-4">📧</div>
+              <h2 className="font-bold text-[#0D1F3C] mb-2">Check your email</h2>
+              <p className="text-gray-500 text-sm">If that email exists, a reset link has been sent.</p>
+              <Link to="/login" className="mt-6 block text-sm font-semibold" style={{ color: "#00A651" }}>Back to Login</Link>
             </div>
-          </div>
-          <Button type="submit" className="w-full h-12 font-medium" disabled={loading}>
-            {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                Sending...
-              </>
-            ) : (
-              "Send reset link"
-            )}
-          </Button>
-        </form>
-      )}
-    </AuthLayout>
+          ) : (
+            <>
+              {error && <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 text-red-600 text-sm">{error}</div>}
+              <form onSubmit={handleSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Email Address</label>
+                  <input type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
+                    className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-green-500"
+                    placeholder="you@email.com" />
+                </div>
+                <button type="submit" disabled={loading}
+                  className="w-full py-3 rounded-full text-white font-bold text-sm disabled:opacity-60"
+                  style={{ background: "#00A651" }}>
+                  {loading ? "Sending..." : "Send Reset Link"}
+                </button>
+              </form>
+              <div className="mt-4 text-center">
+                <Link to="/login" className="text-sm text-gray-400 hover:text-gray-600">Back to Login</Link>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }

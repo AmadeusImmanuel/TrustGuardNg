@@ -15,8 +15,8 @@ export default function TransactionTrendChart({ transactions }) {
     const d = new Date(t.created_date);
     const key = d.toLocaleDateString("en-NG", { month: "short", day: "numeric" });
     if (!days[key]) return;
-    if (t.type === "Escrow_Inflow") days[key].inflow += t.amount || 0;
-    if (t.type === "Manual_Release" || t.type === "Auto_Release_Payout") days[key].payout += t.amount || 0;
+    if (t.type === "Escrow_Inflow") days[key].inflow += Number(t.amount) || 0;
+    if (t.type === "Manual_Release" || t.type === "Auto_Release_Payout") days[key].payout += Number(t.amount) || 0;
   });
 
   const data = Object.values(days);

@@ -24,6 +24,7 @@ import AdminUsers from './pages/AdminUsers';
 import AdminDisputes from './pages/AdminDisputes';
 import AdminWebhooks from './pages/AdminWebhooks';
 import AdminAllTrades from './pages/AdminAllTrades';
+import AdminSettings from './pages/AdminSettings';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
@@ -73,6 +74,7 @@ const AuthenticatedApp = () => {
       <Route path="/admin/trades" element={<AdminAllTrades />} />
       <Route path="/admin/disputes" element={<AdminDisputes />} />
       <Route path="/admin/webhooks" element={<AdminWebhooks />} />
+      <Route path="/admin/settings" element={<AdminSettings />} />
 
       <Route path="*" element={<PageNotFound />} />
     </Routes>

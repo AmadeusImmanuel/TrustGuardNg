@@ -17,7 +17,7 @@ export default function TradeVolumeChart({ trades }) {
     const d = new Date(t.created_date);
     const key = d.toLocaleDateString("en-NG", { month: "short", day: "numeric" });
     if (days[key]) {
-      days[key].volume += t.amount || 0;
+      days[key].volume += Number(t.amount) || 0;
       days[key].count += 1;
     }
   });
