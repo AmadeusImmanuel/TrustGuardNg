@@ -9,6 +9,56 @@ const app = express();
 app.use(cors({ origin: process.env.FRONTEND_URL || "http://localhost:5173" }));
 app.use(express.json());
 
+// ─── File uploads (dispute evidence) ──────────────────────────────────────
+const multer = require("multer");
+const path = require("path");
+const fs = require("fs");
+
+const EVIDENCE_DIR = path.join(__dirname, "uploads", "evidence");
+if (!fs.existsSync(EVIDENCE_DIR)) fs.mkdirSync(EVIDENCE_DIR, { recursive: true });
+
+const evidenceStorage = multer.diskStorage({
+  destination: (req, file, cb) => cb(null, EVIDENCE_DIR),
+  filename: (req, file, cb) => {
+    const ext = path.extname(file.originalname);
+    const safeName = `${Date.now()}-${Math.round(Math.random() * 1e9)}${ext}`;
+    cb(null, safeName);
+  },
+});
+
+const ALLOWED_EVIDENCE_TYPES = [
+  "image/jpeg", "image/png", "image/webp", "image/gif",
+  "video/mp4", "video/quicktime", "video/webm",
+];
+
+const evidenceUpload = multer({
+  storage: evidenceStorage,
+  limits: { fileSize: 25 * 1024 * 1024 }, // 25MB
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED_EVIDENCE_TYPES.includes(file.mimetype)) cb(null, true);
+    else cb(new Error("Unsupported file type. Allowed: JPG, PNG, WEBP, GIF, MP4, MOV, WEBM."));
+  },
+});
+
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
+
+// Wraps evidenceUpload.array() so any multer error (bad file type, size
+// limit, unexpected field, etc.) returns proper JSON instead of Express's
+// default HTML error page — which was breaking the frontend's res.json()
+// parse with an "Unexpected token '<'" error.
+function handleEvidenceUpload(req, res, next) {
+  evidenceUpload.array("files", 10)(req, res, (err) => {
+    if (err) {
+      console.error("Evidence upload error:", err.message);
+      const message = err instanceof multer.MulterError
+        ? `Upload error: ${err.message}`
+        : err.message || "File upload failed";
+      return res.status(400).json({ error: message });
+    }
+    next();
+  });
+}
+
 const pool = new Pool({
   host: process.env.DB_HOST || "localhost",
   port: process.env.DB_PORT || 5432,
@@ -63,7 +113,21 @@ app.post("/api/auth/login", async (req, res) => {
 
 app.get("/api/auth/me", authenticate, async (req, res) => {
   try {
-    const result = await pool.query("SELECT id, email, full_name, role, created_date FROM users WHERE id = $1", [req.user.id]);
+    // Was previously only selecting id/email/full_name/role/created_date —
+    // silently breaking every feature that reads wallet_balance, kyc_status,
+    // trust_score/level, etc. from the logged-in user object (wallet display,
+    // KYC withdrawal gating, trust badges). Excludes password_hash and reset
+    // tokens intentionally — those should never reach the client.
+    const result = await pool.query(
+      `SELECT id, email, full_name, role, status, created_date, updated_date,
+        wallet_balance, kyc_status, kyc_bvn, kyc_nin, phone,
+        trust_score, trust_level, completed_trades, cancelled_trades, total_disputes,
+        rating_sum, rating_count, risk_score, risk_level, flagged,
+        notification_email, notification_sms, notification_inapp,
+        profile_public, show_email
+       FROM users WHERE id = $1`,
+      [req.user.id]
+    );
     res.json(result.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -123,11 +187,67 @@ function crudRouter(table, allowedFields) {
   return router;
 }
 
+// --- KYC Submission with Paystack BVN Verification ---
+app.post("/api/users/:id/submit-kyc", authenticate, async (req, res) => {
+  const { bvn, nin } = req.body;
+  const userId = req.params.id;
+
+  if (!bvn || bvn.length !== 11) {
+    return res.status(400).json({ error: "A valid 11-digit BVN is required" });
+  }
+
+  try {
+    let kycStatus = "pending_review";
+    let verificationNote = null;
+
+    try {
+      const paystackRes = await fetch(
+        `https://api.paystack.co/bank/resolve_bvn/${bvn}`,
+        {
+          headers: {
+            Authorization: `Bearer ${process.env.PAYSTACK_SECRET_KEY}`,
+          },
+        }
+      );
+      const paystackData = await paystackRes.json();
+
+      if (paystackRes.ok && paystackData.status === true) {
+        kycStatus = "verified";
+        verificationNote = `Verified via Paystack BVN lookup: ${paystackData.data.first_name} ${paystackData.data.last_name}`;
+      } else {
+        kycStatus = "rejected";
+        verificationNote = paystackData.message || "BVN could not be verified";
+      }
+    } catch (paystackErr) {
+      console.error("Paystack BVN verification error:", paystackErr.message);
+      kycStatus = "pending_review";
+      verificationNote = "Automated verification unavailable, pending manual review";
+    }
+
+    const result = await pool.query(
+      `UPDATE users 
+       SET kyc_bvn = $1, kyc_nin = $2, kyc_status = $3, updated_date = NOW() 
+       WHERE id = $4 
+       RETURNING id, email, full_name, kyc_status, kyc_bvn, kyc_nin`,
+      [bvn, nin || null, kycStatus, userId]
+    );
+
+    if (!result.rows[0]) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    res.json({ ...result.rows[0], verification_note: verificationNote });
+  } catch (err) {
+    console.error("KYC submission error:", err.message);
+    res.status(500).json({ error: "Failed to process KYC submission" });
+  }
+});
+
 app.use("/api/users",          crudRouter("users",          ["email","full_name","role","status","wallet_balance","kyc_status","kyc_bvn","kyc_nin"]));
 app.use("/api/transactions",   crudRouter("transactions",   ["user_id","amount","currency","type","status","reference","description","metadata","trade_id","trade_reference","user_name","fee_collected","direction"]));
 app.use("/api/disputes",       crudRouter("disputes",       ["transaction_id","user_id","reason","status","evidence","resolution","amount"]));
 app.use("/api/payouts",        crudRouter("payouts",        ["user_id","amount","currency","status","bank_account","reference","scheduled_date"]));
-app.use("/api/trades",         crudRouter("trades",         ["user_id","buyer_id","seller_id","buyer_email","buyer_name","seller_email","seller_name","item_name","item_description","amount","calculated_fee","fee_payer","status","reference","virtual_bank_name","virtual_account_number","virtual_account_expires_at","delivery_deadline","shipped_at","confirmed_at","auto_release_at","dispatch_company","rider_name","rider_phone","tracking_code","asset","type","quantity","price","settled_at","release_days"]));
+app.use("/api/trades",         crudRouter("trades",         ["buyer_id","seller_id","buyer_email","buyer_name","seller_email","seller_name","item_name","item_description","amount","calculated_fee","fee_payer","status","reference","virtual_bank_name","virtual_account_number","virtual_account_expires_at","delivery_deadline","shipped_at","confirmed_at","auto_release_at","dispatch_company","rider_name","rider_phone","tracking_code","release_days","seller_message","accepted_at","rejected_at"]));
 app.use("/api/webhook-events", crudRouter("webhook_events", ["event_type","payload","status","source","retries"]));
 
 app.get("/api/health", (_, res) => res.json({ status: "ok", db: "postgresql" }));
@@ -244,6 +364,12 @@ app.post("/api/trades/:id/confirm-payment", authenticate, async (req, res) => {
       [req.params.id]
     );
 
+    // Notify buyer
+    if (trade.buyer_id) {
+      await createNotification(trade.buyer_id, "Item Shipped!", `Your item "${trade.item_name}" has been shipped. Please confirm delivery when received.`, "info", `/trades/${req.params.id}`);
+    }
+    await sendTradeNotification(updated.rows[0], "Shipped");
+
     res.json(updated.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -253,6 +379,11 @@ app.post("/api/trades/:id/release-funds", authenticate, async (req, res) => {
     const result = await pool.query("SELECT * FROM trades WHERE id = $1", [req.params.id]);
     const trade = result.rows[0];
     if (!trade) return res.status(404).json({ error: "Trade not found" });
+    // Guard against double-submission (double-click, retry, etc.) crediting
+    // the seller's wallet more than once for the same release.
+    if (trade.status !== "Shipped") {
+      return res.status(400).json({ error: "Trade is not in a releasable state (already confirmed or invalid status)" });
+    }
 
     const fee = parseFloat(trade.calculated_fee) || 0;
     const amount = parseFloat(trade.amount) || 0;
@@ -272,6 +403,16 @@ app.post("/api/trades/:id/release-funds", authenticate, async (req, res) => {
       [req.params.id]
     );
 
+    // Notify seller
+    if (trade.seller_id) {
+      await createNotification(trade.seller_id, "Payment Released!", `Funds for "${trade.item_name}" have been released to your wallet.`, "success", `/trades/${trade.id}`);
+    }
+    // Notify buyer
+    if (trade.buyer_id) {
+      await createNotification(trade.buyer_id, "Delivery Confirmed", `You confirmed delivery of "${trade.item_name}". Thank you for using TrustGuard!`, "success", `/trades/${trade.id}`);
+    }
+    await sendTradeNotification(updated.rows[0], "Confirmed");
+
     res.json(updated.rows[0]);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -282,6 +423,10 @@ app.post("/api/disputes/:id/resolve", authenticate, async (req, res) => {
     const dResult = await pool.query("SELECT * FROM disputes WHERE id = $1", [req.params.id]);
     const dispute = dResult.rows[0];
     if (!dispute) return res.status(404).json({ error: "Dispute not found" });
+
+    if (dispute.status === "RESOLVED") {
+      return res.status(400).json({ error: "This dispute has already been resolved — cannot apply a ruling twice." });
+    }
 
     const tResult = await pool.query("SELECT * FROM trades WHERE id = $1", [dispute.transaction_id]);
     const trade = tResult.rows[0];
@@ -315,6 +460,11 @@ app.post("/api/disputes/:id/resolve", authenticate, async (req, res) => {
       "UPDATE trades SET status = 'Resolved', updated_date = NOW() WHERE id = $1 RETURNING *",
       [dispute.transaction_id]
     );
+
+    // Notify both parties of resolution
+    if (trade.buyer_id) await createNotification(trade.buyer_id, "Dispute Resolved", `The dispute for "${trade.item_name}" has been resolved. Ruling: ${ruling}.`, "info", `/trades/${dispute.transaction_id}`);
+    if (trade.seller_id) await createNotification(trade.seller_id, "Dispute Resolved", `The dispute for "${trade.item_name}" has been resolved. Ruling: ${ruling}.`, "info", `/trades/${dispute.transaction_id}`);
+    await sendTradeNotification(trade, "Resolved");
 
     res.json({ dispute: { ...dispute, status: "RESOLVED", resolution: resolution || ruling }, trade: updatedTrade.rows[0] });
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -428,3 +578,1234 @@ async function runAutoRelease() {
 // Run immediately on startup, then every 5 minutes
 runAutoRelease();
 setInterval(runAutoRelease, 5 * 60 * 1000);
+
+// ─── Public transaction tracker ───────────────────────────────────────────────
+app.get("/api/trades/track/:reference", async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT id, reference, item_name, amount, status, created_date, shipped_at, confirmed_at, dispatch_company, tracking_code FROM trades WHERE reference = $1",
+      [req.params.reference]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: "Transaction not found" });
+    res.json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Reputation System ────────────────────────────────────────────────────────
+async function calculateTrustScore(userId) {
+  try {
+    const userRes = await pool.query("SELECT * FROM users WHERE id = $1", [userId]);
+    const user = userRes.rows[0];
+    if (!user) return 0;
+
+    // Completed trades as buyer or seller
+    const tradesRes = await pool.query(
+      "SELECT COUNT(*) FROM trades WHERE (buyer_id = $1 OR seller_id = $1) AND status IN ('Confirmed', 'Resolved')",
+      [userId]
+    );
+    const completedTrades = parseInt(tradesRes.rows[0].count) || 0;
+
+    // Disputes raised against this user
+    const disputesRes = await pool.query(
+      "SELECT COUNT(*) FROM disputes WHERE user_id != $1 AND transaction_id IN (SELECT id FROM trades WHERE buyer_id = $1 OR seller_id = $1)",
+      [userId]
+    );
+    const disputesAgainst = parseInt(disputesRes.rows[0].count) || 0;
+
+    // Account age in days
+    const ageRes = await pool.query(
+      "SELECT EXTRACT(DAY FROM NOW() - created_date) AS age FROM users WHERE id = $1",
+      [userId]
+    );
+    const accountAgeDays = parseInt(ageRes.rows[0]?.age) || 0;
+
+    // KYC level score
+    const kycScores = { none: 0, pending: 5, verified: 30 };
+    const kycScore = kycScores[user.kyc_status] || 0;
+
+    // Calculate score
+    let score = 0;
+    score += completedTrades * 20;     // 20 points per completed trade
+    score += Math.min(accountAgeDays, 365) * 0.1; // up to 36 points for account age
+    score += kycScore;                  // KYC bonus
+    score -= disputesAgainst * 15;     // -15 per dispute against you
+    score = Math.max(0, Math.round(score));
+
+    // Determine level
+    let level = "Bronze";
+    if (score >= 1000) level = "Diamond";
+    else if (score >= 600) level = "Platinum";
+    else if (score >= 300) level = "Gold";
+    else if (score >= 100) level = "Silver";
+
+    // Update user
+    await pool.query(
+      "UPDATE users SET trust_score = $1, trust_level = $2, completed_trades = $3, total_disputes = $4, updated_date = NOW() WHERE id = $5",
+      [score, level, completedTrades, disputesAgainst, userId]
+    );
+
+    return { score, level, completedTrades, disputesAgainst, accountAgeDays, kycScore };
+  } catch (err) {
+    console.error("Trust score calculation error:", err.message);
+    return { score: 0, level: "Bronze" };
+  }
+}
+
+app.get("/api/users/:id/reputation", authenticate, async (req, res) => {
+  try {
+    const reputation = await calculateTrustScore(req.params.id);
+    res.json(reputation);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/users/recalculate-reputation", authenticate, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  try {
+    const users = await pool.query("SELECT id FROM users");
+    for (const user of users.rows) {
+      await calculateTrustScore(user.id);
+    }
+    res.json({ message: `Recalculated for ${users.rows.length} users` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Reviews System ───────────────────────────────────────────────────────────
+app.post("/api/reviews", authenticate, async (req, res) => {
+  const { trade_id, reviewee_id, rating, comment, reviewer_role } = req.body;
+  if (!trade_id || !reviewee_id || !rating) return res.status(400).json({ error: "trade_id, reviewee_id and rating are required" });
+  if (rating < 1 || rating > 5) return res.status(400).json({ error: "Rating must be between 1 and 5" });
+  try {
+    // Check trade exists and is completed
+    const tradeRes = await pool.query("SELECT * FROM trades WHERE id = $1", [trade_id]);
+    const trade = tradeRes.rows[0];
+    if (!trade) return res.status(404).json({ error: "Trade not found" });
+    if (!["Confirmed", "Resolved"].includes(trade.status)) return res.status(400).json({ error: "Can only review completed trades" });
+
+    // Check not already reviewed this trade
+    const existing = await pool.query(
+      "SELECT id FROM reviews WHERE trade_id = $1 AND reviewer_id = $2",
+      [trade_id, req.user.id]
+    );
+    if (existing.rows.length > 0) return res.status(409).json({ error: "You have already reviewed this trade" });
+
+    // Create review
+    const result = await pool.query(
+      `INSERT INTO reviews (trade_id, reviewer_id, reviewee_id, rating, comment, reviewer_role)
+       VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
+      [trade_id, req.user.id, reviewee_id, rating, comment || null, reviewer_role || null]
+    );
+
+    // Update reviewee's rating stats
+    await pool.query(
+      `UPDATE users SET
+        rating_sum = COALESCE(rating_sum, 0) + $1,
+        rating_count = COALESCE(rating_count, 0) + 1,
+        updated_date = NOW()
+       WHERE id = $2`,
+      [rating, reviewee_id]
+    );
+
+    // Recalculate trust score
+    await calculateTrustScore(reviewee_id);
+
+    res.status(201).json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get("/api/reviews/user/:userId", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT r.*, u.full_name as reviewer_name, u.trust_level as reviewer_level
+       FROM reviews r
+       LEFT JOIN users u ON u.id = r.reviewer_id
+       WHERE r.reviewee_id = $1
+       ORDER BY r.created_date DESC`,
+      [req.params.userId]
+    );
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get("/api/reviews/trade/:tradeId", authenticate, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM reviews WHERE trade_id = $1 AND reviewer_id = $2",
+      [req.params.tradeId, req.user.id]
+    );
+    res.json(result.rows[0] || null);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Public User Profile ──────────────────────────────────────────────────────
+app.get("/api/profile/:userId", async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT 
+        id, full_name, email, role, status, kyc_status, trust_score, trust_level,
+        wallet_balance, completed_trades, total_disputes, rating_sum, rating_count,
+        created_date
+       FROM users WHERE id = $1`,
+      [req.params.userId]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: "User not found" });
+
+    const user = result.rows[0];
+
+    // Get trade stats
+    const tradeStats = await pool.query(
+      `SELECT 
+        COUNT(*) FILTER (WHERE status IN ('Confirmed','Resolved')) as completed,
+        COUNT(*) FILTER (WHERE status = 'Disputed') as disputed,
+        COUNT(*) as total
+       FROM trades WHERE buyer_id = $1 OR seller_id = $1`,
+      [req.params.userId]
+    );
+
+    // Get recent reviews
+    const reviews = await pool.query(
+      `SELECT r.*, u.full_name as reviewer_name, u.trust_level as reviewer_level
+       FROM reviews r
+       LEFT JOIN users u ON u.id = r.reviewer_id
+       WHERE r.reviewee_id = $1
+       ORDER BY r.created_date DESC LIMIT 5`,
+      [req.params.userId]
+    );
+
+    const stats = tradeStats.rows[0];
+    const avgRating = user.rating_count > 0
+      ? (parseFloat(user.rating_sum) / parseInt(user.rating_count)).toFixed(1)
+      : null;
+
+    res.json({
+      id: user.id,
+      full_name: user.full_name,
+      email: user.email,
+      role: user.role,
+      status: user.status,
+      kyc_status: user.kyc_status,
+      trust_score: user.trust_score || 0,
+      trust_level: user.trust_level || "Bronze",
+      completed_trades: parseInt(stats.completed) || 0,
+      total_trades: parseInt(stats.total) || 0,
+      disputed_trades: parseInt(stats.disputed) || 0,
+      rating_avg: avgRating,
+      rating_count: parseInt(user.rating_count) || 0,
+      member_since: user.created_date,
+      reviews: reviews.rows,
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Notifications System ─────────────────────────────────────────────────────
+async function createNotification(userId, title, message, type = "info", link = null) {
+  if (!userId) return;
+  try {
+    await pool.query(
+      "INSERT INTO notifications (user_id, title, message, type, link) VALUES ($1, $2, $3, $4, $5)",
+      [userId, title, message, type, link]
+    );
+  } catch (err) {
+    console.error("Failed to create notification:", err.message);
+  }
+}
+
+app.get("/api/notifications", authenticate, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT * FROM notifications WHERE user_id = $1 ORDER BY created_date DESC LIMIT 50",
+      [req.user.id]
+    );
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get("/api/notifications/unread-count", authenticate, async (req, res) => {
+  try {
+    const result = await pool.query(
+      "SELECT COUNT(*) FROM notifications WHERE user_id = $1 AND read = FALSE",
+      [req.user.id]
+    );
+    res.json({ count: parseInt(result.rows[0].count) });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/notifications/:id/read", authenticate, async (req, res) => {
+  try {
+    await pool.query(
+      "UPDATE notifications SET read = TRUE WHERE id = $1 AND user_id = $2",
+      [req.params.id, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/notifications/mark-all-read", authenticate, async (req, res) => {
+  try {
+    await pool.query(
+      "UPDATE notifications SET read = TRUE WHERE user_id = $1",
+      [req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/notifications/test", authenticate, async (req, res) => {
+  try {
+    await createNotification(req.user.id, "Welcome to TrustGuard!", "Your account is set up. Start your first secure trade today.", "success", "/dashboard");
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Enhanced Dispute Center ──────────────────────────────────────────────────
+async function addDisputeTimelineEvent(disputeId, event, actor = "system") {
+  try {
+    const result = await pool.query("SELECT timeline FROM disputes WHERE id = $1", [disputeId]);
+    const timeline = result.rows[0]?.timeline || [];
+    timeline.push({ event, actor, timestamp: new Date().toISOString() });
+    await pool.query("UPDATE disputes SET timeline = $1, updated_date = NOW() WHERE id = $2", [JSON.stringify(timeline), disputeId]);
+  } catch (err) { console.error("Timeline update failed:", err.message); }
+}
+
+// Get full dispute detail
+app.get("/api/disputes/:id/detail", authenticate, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT d.*, 
+        t.item_name, t.amount, t.reference, t.buyer_id, t.seller_id, t.buyer_email, t.seller_email,
+        u.full_name as raised_by_name
+       FROM disputes d
+       LEFT JOIN trades t ON t.id = d.transaction_id
+       LEFT JOIN users u ON u.id = d.raised_by_id
+       WHERE d.id = $1`,
+      [req.params.id]
+    );
+    if (!result.rows[0]) return res.status(404).json({ error: "Dispute not found" });
+    res.json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Add evidence to dispute
+app.post("/api/disputes/:id/evidence", authenticate, async (req, res) => {
+  const { type, content, label } = req.body;
+  try {
+    const result = await pool.query("SELECT * FROM disputes WHERE id = $1", [req.params.id]);
+    const dispute = result.rows[0];
+    if (!dispute) return res.status(404).json({ error: "Dispute not found" });
+    if (dispute.status === "RESOLVED") return res.status(400).json({ error: "Cannot add evidence to resolved dispute" });
+
+    const files = dispute.evidence_files || [];
+    files.push({ id: Date.now(), type, content, label, submitted_by: req.user.id, submitted_at: new Date().toISOString() });
+
+    await pool.query(
+      "UPDATE disputes SET evidence_files = $1, updated_date = NOW() WHERE id = $2",
+      [JSON.stringify(files), req.params.id]
+    );
+    await addDisputeTimelineEvent(req.params.id, `Evidence added: ${label}`, req.user.email);
+    res.json({ success: true, evidence_files: files });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Upload one or more real image/video files as dispute evidence
+app.post("/api/disputes/:id/evidence/upload", authenticate, handleEvidenceUpload, async (req, res) => {
+  const { label } = req.body;
+  if (!req.files || req.files.length === 0) return res.status(400).json({ error: "No files uploaded" });
+  try {
+    const result = await pool.query("SELECT * FROM disputes WHERE id = $1", [req.params.id]);
+    const dispute = result.rows[0];
+    if (!dispute) return res.status(404).json({ error: "Dispute not found" });
+    if (dispute.status === "RESOLVED") return res.status(400).json({ error: "Cannot add evidence to resolved dispute" });
+
+    const files = dispute.evidence_files || [];
+    const multiple = req.files.length > 1;
+    const newEntries = req.files.map((file, i) => {
+      const fileUrl = `/uploads/evidence/${file.filename}`;
+      const fileType = file.mimetype.startsWith("video/") ? "video" : "image";
+      const baseLabel = label || file.originalname;
+      return {
+        id: Date.now() + i,
+        type: fileType,
+        content: fileUrl,
+        label: multiple ? `${baseLabel} (${i + 1}/${req.files.length})` : baseLabel,
+        mime_type: file.mimetype,
+        original_name: file.originalname,
+        submitted_by: req.user.id,
+        submitted_at: new Date().toISOString(),
+      };
+    });
+    files.push(...newEntries);
+
+    await pool.query(
+      "UPDATE disputes SET evidence_files = $1, updated_date = NOW() WHERE id = $2",
+      [JSON.stringify(files), req.params.id]
+    );
+    await addDisputeTimelineEvent(req.params.id, `${req.files.length} evidence file(s) uploaded: ${label || "files"}`, req.user.email);
+    res.json({ success: true, evidence_files: files });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Add admin notes
+app.put("/api/disputes/:id/admin-notes", authenticate, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  const { notes, status } = req.body;
+  try {
+    await pool.query(
+      "UPDATE disputes SET admin_notes = $1, status = COALESCE($2, status), updated_date = NOW() WHERE id = $3",
+      [notes, status || null, req.params.id]
+    );
+    if (status) await addDisputeTimelineEvent(req.params.id, `Status changed to ${status}`, "admin");
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Admin sends a message visible to both buyer and seller on a dispute.
+app.post("/api/disputes/:id/message", authenticate, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  const { message } = req.body;
+  if (!message || !message.trim()) return res.status(400).json({ error: "Message is required" });
+  try {
+    const result = await pool.query(
+      `SELECT d.*, t.buyer_id, t.seller_id, t.item_name
+       FROM disputes d LEFT JOIN trades t ON t.id = d.transaction_id
+       WHERE d.id = $1`,
+      [req.params.id]
+    );
+    const dispute = result.rows[0];
+    if (!dispute) return res.status(404).json({ error: "Dispute not found" });
+
+    await addDisputeTimelineEvent(req.params.id, `Message from support: "${message.trim()}"`, req.user.email);
+
+    if (dispute.buyer_id) {
+      await createNotification(dispute.buyer_id, "New message on your dispute", message.trim(), "info", `/disputes/${req.params.id}`);
+    }
+    if (dispute.seller_id) {
+      await createNotification(dispute.seller_id, "New message on your dispute", message.trim(), "info", `/disputes/${req.params.id}`);
+    }
+
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Appeal a resolved dispute
+app.post("/api/disputes/:id/appeal", authenticate, async (req, res) => {
+  const { reason } = req.body;
+  try {
+    const result = await pool.query("SELECT * FROM disputes WHERE id = $1", [req.params.id]);
+    const dispute = result.rows[0];
+    if (!dispute) return res.status(404).json({ error: "Dispute not found" });
+    if (dispute.status !== "RESOLVED") return res.status(400).json({ error: "Can only appeal resolved disputes" });
+
+    await pool.query(
+      "UPDATE disputes SET appeal_reason = $1, appealed_at = NOW(), status = 'UNDER_REVIEW', updated_date = NOW() WHERE id = $2",
+      [reason, req.params.id]
+    );
+    await addDisputeTimelineEvent(req.params.id, `Appeal submitted: ${reason}`, req.user.email);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Audit Logs ───────────────────────────────────────────────────────────────
+async function logAdminAction(adminId, adminEmail, action, entityType, entityId, details) {
+  try {
+    await pool.query(
+      "INSERT INTO audit_logs (admin_id, admin_email, action, entity_type, entity_id, details) VALUES ($1, $2, $3, $4, $5, $6)",
+      [adminId, adminEmail, action, entityType, entityId, JSON.stringify(details || {})]
+    );
+  } catch (err) { console.error("Audit log failed:", err.message); }
+}
+
+app.get("/api/admin/audit-logs", authenticate, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  try {
+    const result = await pool.query(
+      "SELECT * FROM audit_logs ORDER BY created_date DESC LIMIT 100"
+    );
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── KYC Queue ────────────────────────────────────────────────────────────────
+app.get("/api/admin/kyc-queue", authenticate, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  try {
+    const result = await pool.query(
+      "SELECT id, email, full_name, kyc_status, kyc_bvn, kyc_nin, created_date FROM users WHERE kyc_status = 'pending' ORDER BY created_date ASC"
+    );
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/admin/kyc/:userId/approve", authenticate, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  try {
+    await pool.query("UPDATE users SET kyc_status = 'verified', updated_date = NOW() WHERE id = $1", [req.params.userId]);
+    await logAdminAction(req.user.id, req.user.email, "KYC Approved", "user", req.params.userId, {});
+    await createNotification(req.params.userId, "KYC Verified!", "Your identity has been verified. You can now withdraw funds above ₦50,000.", "success", "/wallet");
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/admin/kyc/:userId/reject", authenticate, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  const { reason } = req.body;
+  try {
+    await pool.query("UPDATE users SET kyc_status = 'rejected', updated_date = NOW() WHERE id = $1", [req.params.userId]);
+    await logAdminAction(req.user.id, req.user.email, "KYC Rejected", "user", req.params.userId, { reason });
+    await createNotification(req.params.userId, "KYC Rejected", `Your identity verification was rejected. Reason: ${reason || "Documents unclear"}. Please resubmit.`, "error", "/wallet");
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Support Tickets ──────────────────────────────────────────────────────────
+app.post("/api/support-tickets", authenticate, async (req, res) => {
+  const { subject, message, priority } = req.body;
+  if (!subject || !message) return res.status(400).json({ error: "Subject and message required" });
+  try {
+    const result = await pool.query(
+      "INSERT INTO support_tickets (user_id, user_email, subject, message, priority) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+      [req.user.id, req.user.email, subject, message, priority || "normal"]
+    );
+    res.status(201).json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.get("/api/support-tickets", authenticate, async (req, res) => {
+  try {
+    let query, params;
+    if (req.user.role === "admin") {
+      query = "SELECT * FROM support_tickets ORDER BY created_date DESC LIMIT 100";
+      params = [];
+    } else {
+      query = "SELECT * FROM support_tickets WHERE user_id = $1 ORDER BY created_date DESC";
+      params = [req.user.id];
+    }
+    const result = await pool.query(query, params);
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/support-tickets/:id/respond", authenticate, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  const { response, status } = req.body;
+  try {
+    const result = await pool.query(
+      "UPDATE support_tickets SET admin_response = $1, status = COALESCE($2, status), responded_at = NOW(), updated_date = NOW() WHERE id = $3 RETURNING *",
+      [response, status || "answered", req.params.id]
+    );
+    const ticket = result.rows[0];
+    if (ticket?.user_id) {
+      await createNotification(ticket.user_id, "Support Ticket Answered", `Your ticket "${ticket.subject}" has been answered by our support team.`, "info", "/support");
+    }
+    await logAdminAction(req.user.id, req.user.email, "Support Ticket Responded", "ticket", req.params.id, { response });
+    res.json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── System Health ────────────────────────────────────────────────────────────
+app.get("/api/admin/system-health", authenticate, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  try {
+    const [users, trades, disputes, tickets, pendingKyc] = await Promise.all([
+      pool.query("SELECT COUNT(*) FROM users"),
+      pool.query("SELECT COUNT(*) FROM trades WHERE status IN ('Awaiting_Payment','Funded','Shipped')"),
+      pool.query("SELECT COUNT(*) FROM disputes WHERE status = 'OPEN'"),
+      pool.query("SELECT COUNT(*) FROM support_tickets WHERE status = 'open'"),
+      pool.query("SELECT COUNT(*) FROM users WHERE kyc_status = 'pending'"),
+    ]);
+    res.json({
+      total_users: parseInt(users.rows[0].count),
+      active_trades: parseInt(trades.rows[0].count),
+      open_disputes: parseInt(disputes.rows[0].count),
+      open_tickets: parseInt(tickets.rows[0].count),
+      pending_kyc: parseInt(pendingKyc.rows[0].count),
+      db_status: "healthy",
+      uptime: process.uptime(),
+    });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Fraud Prevention Engine ──────────────────────────────────────────────────
+async function calculateRiskScore(userId) {
+  try {
+    const userRes = await pool.query("SELECT * FROM users WHERE id = $1", [userId]);
+    const user = userRes.rows[0];
+    if (!user) return { score: 0, level: "low", flags: [] };
+
+    let score = 0;
+    const flags = [];
+
+    // Check dispute rate
+    const disputeRes = await pool.query(
+      "SELECT COUNT(*) FROM disputes WHERE user_id = $1 AND created_date > NOW() - INTERVAL '30 days'",
+      [userId]
+    );
+    const recentDisputes = parseInt(disputeRes.rows[0].count);
+    if (recentDisputes >= 3) { score += 40; flags.push("High dispute rate (30 days)"); }
+    else if (recentDisputes >= 2) { score += 20; flags.push("Elevated dispute rate"); }
+
+    // Check trade velocity (too many trades in short time)
+    const velocityRes = await pool.query(
+      "SELECT COUNT(*) FROM trades WHERE buyer_id = $1 AND created_date > NOW() - INTERVAL '24 hours'",
+      [userId]
+    );
+    const recentTrades = parseInt(velocityRes.rows[0].count);
+    if (recentTrades >= 10) { score += 30; flags.push("Unusual trade velocity"); }
+
+    // Check if account is new with high activity
+    const accountAgeRes = await pool.query(
+      "SELECT EXTRACT(DAY FROM NOW() - created_date) as age FROM users WHERE id = $1",
+      [userId]
+    );
+    const ageDays = parseInt(accountAgeRes.rows[0]?.age) || 0;
+    const tradeCountRes = await pool.query(
+      "SELECT COUNT(*) FROM trades WHERE buyer_id = $1 OR seller_id = $1",
+      [userId]
+    );
+    const totalTrades = parseInt(tradeCountRes.rows[0].count);
+    if (ageDays < 7 && totalTrades > 5) { score += 25; flags.push("New account with high activity"); }
+
+    // No KYC but high volume
+    const volumeRes = await pool.query(
+      "SELECT COALESCE(SUM(amount), 0) as vol FROM trades WHERE (buyer_id = $1 OR seller_id = $1) AND created_date > NOW() - INTERVAL '7 days'",
+      [userId]
+    );
+    const weeklyVolume = parseFloat(volumeRes.rows[0].vol);
+    if (user.kyc_status !== "verified" && weeklyVolume > 500000) {
+      score += 20; flags.push("High volume without KYC");
+    }
+
+    // Multiple failed login attempts (check disputes against them)
+    const disputesAgainstRes = await pool.query(
+      `SELECT COUNT(*) FROM disputes d
+       JOIN trades t ON t.id = d.transaction_id
+       WHERE (t.buyer_id = $1 OR t.seller_id = $1) AND d.user_id != $1`,
+      [userId]
+    );
+    const disputesAgainst = parseInt(disputesAgainstRes.rows[0].count);
+    if (disputesAgainst >= 3) { score += 30; flags.push("Multiple disputes raised against user"); }
+
+    // Determine level
+    let level = "low";
+    if (score >= 70) level = "high";
+    else if (score >= 40) level = "medium";
+
+    // Update user risk score
+    await pool.query(
+      "UPDATE users SET risk_score = $1, risk_level = $2, flagged = $3, updated_date = NOW() WHERE id = $4",
+      [score, level, score >= 70, userId]
+    );
+
+    // Create fraud alert if high risk
+    if (score >= 70 && flags.length > 0) {
+      const existingAlert = await pool.query(
+        "SELECT id FROM fraud_alerts WHERE user_id = $1 AND resolved = FALSE AND created_date > NOW() - INTERVAL '24 hours'",
+        [userId]
+      );
+      if (existingAlert.rows.length === 0) {
+        await pool.query(
+          "INSERT INTO fraud_alerts (user_id, alert_type, severity, description, metadata) VALUES ($1, $2, $3, $4, $5)",
+          [userId, "High Risk Score", level, flags.join(", "), JSON.stringify({ score, flags, weekly_volume: weeklyVolume })]
+        );
+        // Notify admins
+        const admins = await pool.query("SELECT id FROM users WHERE role = 'admin'");
+        for (const admin of admins.rows) {
+          await createNotification(admin.id, "🚨 Fraud Alert", `High-risk activity detected for user ${user.email}. Risk score: ${score}`, "error", "/admin/fraud");
+        }
+      }
+    }
+
+    return { score, level, flags };
+  } catch (err) {
+    console.error("Risk score error:", err.message);
+    return { score: 0, level: "low", flags: [] };
+  }
+}
+
+// Risk score endpoint
+app.get("/api/users/:id/risk-score", authenticate, async (req, res) => {
+  if (req.user.role !== "admin" && req.user.id !== req.params.id) return res.status(403).json({ error: "Forbidden" });
+  try {
+    const result = await calculateRiskScore(req.params.id);
+    res.json(result);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Fraud alerts
+app.get("/api/admin/fraud-alerts", authenticate, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  try {
+    const result = await pool.query(
+      `SELECT fa.*, u.email, u.full_name, u.risk_score, u.risk_level
+       FROM fraud_alerts fa
+       LEFT JOIN users u ON u.id = fa.user_id
+       ORDER BY fa.created_date DESC LIMIT 100`
+    );
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/admin/fraud-alerts/:id/resolve", authenticate, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  try {
+    await pool.query(
+      "UPDATE fraud_alerts SET resolved = TRUE, resolved_by = $1 WHERE id = $2",
+      [req.user.id, req.params.id]
+    );
+    await logAdminAction(req.user.id, req.user.email, "Fraud Alert Resolved", "fraud_alert", req.params.id, {});
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Blacklist management
+app.get("/api/admin/blacklist", authenticate, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  try {
+    const result = await pool.query("SELECT * FROM blacklist ORDER BY created_date DESC");
+    res.json(result.rows);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/admin/blacklist", authenticate, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  const { type, value, reason } = req.body;
+  try {
+    const result = await pool.query(
+      "INSERT INTO blacklist (type, value, reason, added_by) VALUES ($1, $2, $3, $4) RETURNING *",
+      [type, value, reason, req.user.id]
+    );
+    await logAdminAction(req.user.id, req.user.email, "Blacklist Entry Added", "blacklist", result.rows[0].id, { type, value, reason });
+    res.json(result.rows[0]);
+  } catch (err) {
+    if (err.code === "23505") return res.status(409).json({ error: "Already blacklisted" });
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.delete("/api/admin/blacklist/:id", authenticate, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  try {
+    await pool.query("DELETE FROM blacklist WHERE id = $1", [req.params.id]);
+    await logAdminAction(req.user.id, req.user.email, "Blacklist Entry Removed", "blacklist", req.params.id, {});
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Recalculate all risk scores
+app.post("/api/admin/recalculate-risk", authenticate, async (req, res) => {
+  if (req.user.role !== "admin") return res.status(403).json({ error: "Admin only" });
+  try {
+    const users = await pool.query("SELECT id FROM users");
+    for (const user of users.rows) await calculateRiskScore(user.id);
+    res.json({ message: `Risk scores updated for ${users.rows.length} users` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── User Settings ────────────────────────────────────────────────────────────
+app.get("/api/settings/profile", authenticate, async (req, res) => {
+  try {
+    const result = await pool.query(
+      `SELECT id, email, full_name, phone, kyc_status, trust_level, trust_score,
+        notification_email, notification_sms, notification_inapp,
+        profile_public, show_email, created_date
+       FROM users WHERE id = $1`,
+      [req.user.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/settings/profile", authenticate, async (req, res) => {
+  const { full_name, phone } = req.body;
+  try {
+    const result = await pool.query(
+      "UPDATE users SET full_name = $1, phone = $2, updated_date = NOW() WHERE id = $3 RETURNING id, email, full_name, phone",
+      [full_name, phone, req.user.id]
+    );
+    res.json(result.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/settings/password", authenticate, async (req, res) => {
+  const { current_password, new_password } = req.body;
+  if (!current_password || !new_password) return res.status(400).json({ error: "Both passwords required" });
+  if (new_password.length < 6) return res.status(400).json({ error: "New password must be at least 6 characters" });
+  try {
+    const result = await pool.query("SELECT password_hash FROM users WHERE id = $1", [req.user.id]);
+    const valid = await bcrypt.compare(current_password, result.rows[0].password_hash);
+    if (!valid) return res.status(401).json({ error: "Current password is incorrect" });
+    const hash = await bcrypt.hash(new_password, 10);
+    await pool.query("UPDATE users SET password_hash = $1, updated_date = NOW() WHERE id = $2", [hash, req.user.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/settings/notifications", authenticate, async (req, res) => {
+  const { notification_email, notification_sms, notification_inapp } = req.body;
+  try {
+    await pool.query(
+      "UPDATE users SET notification_email = $1, notification_sms = $2, notification_inapp = $3, updated_date = NOW() WHERE id = $4",
+      [notification_email, notification_sms, notification_inapp, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.put("/api/settings/privacy", authenticate, async (req, res) => {
+  const { profile_public, show_email } = req.body;
+  try {
+    await pool.query(
+      "UPDATE users SET profile_public = $1, show_email = $2, updated_date = NOW() WHERE id = $3",
+      [profile_public, show_email, req.user.id]
+    );
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.delete("/api/settings/account", authenticate, async (req, res) => {
+  const { password } = req.body;
+  try {
+    const result = await pool.query("SELECT password_hash FROM users WHERE id = $1", [req.user.id]);
+    const valid = await bcrypt.compare(password, result.rows[0].password_hash);
+    if (!valid) return res.status(401).json({ error: "Password incorrect" });
+    await pool.query("UPDATE users SET status = 'deactivated', updated_date = NOW() WHERE id = $1", [req.user.id]);
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Paystack Integration ─────────────────────────────────────────────────────
+const axios = require("axios");
+
+const PAYSTACK_SECRET = process.env.PAYSTACK_SECRET_KEY || "sk_test_placeholder";
+
+app.post("/api/paystack/initialize", authenticate, async (req, res) => {
+  const { trade_id, email, amount } = req.body;
+  if (!trade_id || !email || !amount) return res.status(400).json({ error: "trade_id, email, and amount required" });
+  try {
+    const tradeRes = await pool.query("SELECT * FROM trades WHERE id = $1", [trade_id]);
+    const trade = tradeRes.rows[0];
+    if (!trade) return res.status(404).json({ error: "Trade not found" });
+    if (trade.status !== "Awaiting_Payment") return res.status(400).json({ error: "Trade is not awaiting payment" });
+
+    const response = await axios.post(
+      "https://api.paystack.co/transaction/initialize",
+      {
+        email,
+        amount: Math.round(amount * 100), // Paystack uses kobo
+        reference: `TG-${trade.reference}-${Date.now()}`,
+        callback_url: `${process.env.FRONTEND_URL || "http://localhost:5173"}/trades/${trade_id}?payment=success`,
+        metadata: {
+          trade_id,
+          trade_reference: trade.reference,
+          item_name: trade.item_name,
+          cancel_action: `${process.env.FRONTEND_URL || "http://localhost:5173"}/trades/${trade_id}?payment=cancelled`,
+        },
+      },
+      { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}`, "Content-Type": "application/json" } }
+    );
+
+    res.json({
+      authorization_url: response.data.data.authorization_url,
+      reference: response.data.data.reference,
+      access_code: response.data.data.access_code,
+    });
+  } catch (err) {
+    const msg = err.response?.data?.message || err.message;
+    res.status(500).json({ error: msg });
+  }
+});
+
+// Paystack webhook
+app.post("/api/paystack/webhook", express.raw({ type: "application/json" }), async (req, res) => {
+  const hash = crypto.createHmac("sha512", PAYSTACK_SECRET).update(req.body).digest("hex");
+  if (hash !== req.headers["x-paystack-signature"]) return res.status(401).send("Invalid signature");
+
+  const event = JSON.parse(req.body);
+
+  if (event.event === "charge.success") {
+    const { metadata, reference, amount } = event.data;
+    const trade_id = metadata?.trade_id;
+    if (!trade_id) return res.status(200).send("OK");
+
+    try {
+      const tradeRes = await pool.query("SELECT * FROM trades WHERE id = $1", [trade_id]);
+      const trade = tradeRes.rows[0];
+      if (!trade || trade.status !== "Awaiting_Payment") return res.status(200).send("OK");
+
+      // Mark trade as Funded
+      await pool.query(
+        "UPDATE trades SET status = 'Funded', updated_date = NOW() WHERE id = $1",
+        [trade_id]
+      );
+
+      // Create transaction record
+      await pool.query(
+        `INSERT INTO transactions (user_id, trade_id, amount, type, direction, description, status, reference)
+         VALUES ($1, $2, $3, 'Paystack_Payment', 'debit', $4, 'completed', $5)`,
+        [trade.buyer_id, trade_id, amount / 100, `Paystack payment for: ${trade.item_name}`, reference]
+      );
+
+      // Notify seller
+      if (trade.seller_id) {
+        await createNotification(trade.seller_id, "Payment Received!", `Escrow funded for "${trade.item_name}" via Paystack. Please ship the item.`, "success", `/trades/${trade_id}`);
+      }
+
+      // Log webhook event
+      await pool.query(
+        "INSERT INTO webhook_events (event_type, payload, status, source) VALUES ($1, $2, 'processed', 'paystack')",
+        ["charge.success", JSON.stringify(event.data)]
+      );
+    } catch (err) { console.error("Webhook processing error:", err.message); }
+  }
+
+  res.status(200).send("OK");
+});
+
+// Verify payment manually
+app.get("/api/paystack/verify/:reference", authenticate, async (req, res) => {
+  try {
+    const response = await axios.get(
+      `https://api.paystack.co/transaction/verify/${req.params.reference}`,
+      { headers: { Authorization: `Bearer ${PAYSTACK_SECRET}` } }
+    );
+    const data = response.data.data;
+    if (data.status === "success") {
+      const trade_id = data.metadata?.trade_id;
+      if (trade_id) {
+        const tradeRes = await pool.query("SELECT * FROM trades WHERE id = $1", [trade_id]);
+        const trade = tradeRes.rows[0];
+        if (trade && trade.status === "Awaiting_Payment") {
+          await pool.query("UPDATE trades SET status = 'Funded', updated_date = NOW() WHERE id = $1", [trade_id]);
+          if (trade.seller_id) {
+            await createNotification(trade.seller_id, "Payment Received!", `Escrow funded for "${trade.item_name}".`, "success", `/trades/${trade_id}`);
+          }
+        }
+      }
+    }
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.response?.data?.message || err.message });
+  }
+});
+
+// ─── Email Service ────────────────────────────────────────────────────────────
+const nodemailer = require("nodemailer");
+
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST || "smtp.gmail.com",
+  port: parseInt(process.env.EMAIL_PORT) || 587,
+  secure: false,
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+async function sendEmail(to, subject, html) {
+  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
+    console.log(`[Email skipped - no credentials] To: ${to} | Subject: ${subject}`);
+    return;
+  }
+  try {
+    await transporter.sendMail({
+      from: process.env.EMAIL_FROM || "TrustGuard Nigeria <noreply@trustguard.ng>",
+      to,
+      subject,
+      html,
+    });
+    console.log(`[Email sent] To: ${to} | Subject: ${subject}`);
+  } catch (err) {
+    console.error(`[Email failed] To: ${to} | Error: ${err.message}`);
+  }
+}
+
+function emailTemplate(title, body, ctaText, ctaUrl) {
+  return `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+</head>
+<body style="margin:0;padding:0;background:#070B14;font-family:Inter,Arial,sans-serif;">
+  <div style="max-width:560px;margin:0 auto;padding:40px 20px;">
+    <!-- Header -->
+    <div style="text-align:center;margin-bottom:32px;">
+      <div style="display:inline-flex;align-items:center;gap:10px;">
+        <div style="width:36px;height:36px;background:linear-gradient(135deg,#16C47F,#0ea5e9);border-radius:10px;display:inline-block;"></div>
+        <span style="font-size:20px;font-weight:900;color:#fff;">TrustGuard</span>
+        <span style="font-size:13px;color:#16C47F;font-weight:600;">Nigeria</span>
+      </div>
+    </div>
+
+    <!-- Card -->
+    <div style="background:#111827;border-radius:20px;border:1px solid rgba(255,255,255,0.06);overflow:hidden;">
+      <div style="background:linear-gradient(135deg,#16C47F20,#3B82F610);padding:28px 32px;border-bottom:1px solid rgba(255,255,255,0.06);">
+        <h1 style="margin:0;font-size:22px;font-weight:900;color:#fff;">${title}</h1>
+      </div>
+      <div style="padding:28px 32px;">
+        ${body}
+        ${ctaText && ctaUrl ? `
+        <div style="text-align:center;margin-top:28px;">
+          <a href="${ctaUrl}" style="display:inline-block;background:linear-gradient(135deg,#16C47F,#0ea5e9);color:#fff;text-decoration:none;font-weight:700;font-size:14px;padding:14px 32px;border-radius:50px;">
+            ${ctaText} →
+          </a>
+        </div>` : ""}
+      </div>
+    </div>
+
+    <!-- Footer -->
+    <div style="text-align:center;margin-top:28px;">
+      <p style="color:#475569;font-size:12px;margin:0;">
+        © 2026 TrustGuard Nigeria — Amadeus Cybernetics Limited<br>
+        <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}" style="color:#16C47F;text-decoration:none;">Visit Platform</a>
+        &nbsp;·&nbsp;
+        <a href="${process.env.FRONTEND_URL || "http://localhost:5173"}/settings" style="color:#16C47F;text-decoration:none;">Unsubscribe</a>
+      </p>
+    </div>
+  </div>
+</body>
+</html>`;
+}
+
+function row(label, value) {
+  return `<div style="display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid rgba(255,255,255,0.05);">
+    <span style="color:#94A3B8;font-size:13px;">${label}</span>
+    <span style="color:#fff;font-size:13px;font-weight:600;">${value}</span>
+  </div>`;
+}
+
+async function sendTradeNotification(trade, status) {
+  const baseUrl = process.env.FRONTEND_URL || "http://localhost:5173";
+  const tradeUrl = `${baseUrl}/trades/${trade.id}`;
+  const amount = `₦${(Number(trade.amount) || 0).toLocaleString("en-NG")}`;
+
+  const templates = {
+    Funded: {
+      to: trade.seller_email,
+      subject: "🎉 Escrow Funded — Time to Ship!",
+      title: "Payment Received!",
+      body: `
+        <p style="color:#94A3B8;font-size:15px;margin:0 0 20px;">Great news! The buyer has funded the escrow for your trade.</p>
+        ${row("Item", trade.item_name)}
+        ${row("Escrow Amount", amount)}
+        ${row("Reference", trade.reference)}
+        ${row("Buyer", trade.buyer_email)}
+        <p style="color:#94A3B8;font-size:13px;margin:20px 0 0;">Please ship the item as soon as possible. The buyer is waiting!</p>`,
+      cta: "View Trade & Ship Now",
+    },
+    Shipped: {
+      to: trade.buyer_email,
+      subject: "📦 Your Item Has Been Shipped!",
+      title: "Item Shipped!",
+      body: `
+        <p style="color:#94A3B8;font-size:15px;margin:0 0 20px;">The seller has shipped your item. Please confirm delivery when you receive it.</p>
+        ${row("Item", trade.item_name)}
+        ${row("Amount", amount)}
+        ${row("Reference", trade.reference)}
+        ${trade.dispatch_company ? row("Dispatch Company", trade.dispatch_company) : ""}
+        ${trade.tracking_code ? row("Tracking Code", trade.tracking_code) : ""}
+        <p style="color:#F59E0B;font-size:13px;margin:20px 0 0;">⚠️ Funds will auto-release after ${trade.release_days || 2} day(s) if you don't confirm delivery.</p>`,
+      cta: "Confirm Delivery",
+    },
+    Confirmed: {
+      to: trade.seller_email,
+      subject: "✅ Funds Released to Your Wallet!",
+      title: "Payment Released!",
+      body: `
+        <p style="color:#94A3B8;font-size:15px;margin:0 0 20px;">The buyer has confirmed delivery. Your funds have been released!</p>
+        ${row("Item", trade.item_name)}
+        ${row("Amount Released", amount)}
+        ${row("Reference", trade.reference)}
+        <p style="color:#16C47F;font-size:13px;margin:20px 0 0;">✅ Funds are now in your TrustGuard wallet. You can withdraw anytime.</p>`,
+      cta: "View Wallet",
+    },
+    Disputed: {
+      to: null,
+      subject: "⚠️ Dispute Raised on Your Trade",
+      title: "Dispute Opened",
+      body: `
+        <p style="color:#94A3B8;font-size:15px;margin:0 0 20px;">A dispute has been raised on trade <strong style="color:#fff;">${trade.reference}</strong>. Our team will review within 24-48 hours.</p>
+        ${row("Item", trade.item_name)}
+        ${row("Amount", amount)}
+        ${row("Status", "Under Review")}
+        <p style="color:#94A3B8;font-size:13px;margin:20px 0 0;">Please log in and submit any evidence to support your case.</p>`,
+      cta: "View Dispute",
+    },
+    Accepted: {
+      to: trade.buyer_email,
+      subject: "🎉 Seller Accepted Your Trade!",
+      title: "Trade Accepted!",
+      body: `
+        <p style="color:#94A3B8;font-size:15px;margin:0 0 20px;">Great news! The seller has accepted your trade. Please fund the escrow to proceed.</p>
+        ${row("Item", trade.item_name)}
+        ${row("Amount", `₦${(Number(trade.amount) || 0).toLocaleString("en-NG")}`)}
+        ${row("Reference", trade.reference)}
+        <p style="color:#16C47F;font-size:13px;margin:20px 0 0;">✅ Fund the escrow now to get started!</p>`,
+      cta: "Fund Escrow Now",
+    },
+    Rejected: {
+      to: trade.buyer_email,
+      subject: "❌ Trade Rejected by Seller",
+      title: "Trade Rejected",
+      body: `
+        <p style="color:#94A3B8;font-size:15px;margin:0 0 20px;">Unfortunately, the seller has rejected your trade request.</p>
+        ${row("Item", trade.item_name)}
+        ${row("Reference", trade.reference)}
+        ${trade.seller_message ? `<div style="background:rgba(239,68,68,0.1);border-radius:12px;padding:16px;margin-top:16px;"><p style="color:#EF4444;font-size:13px;margin:0;"><strong>Seller's reason:</strong> ${trade.seller_message}</p></div>` : ""}
+        <p style="color:#94A3B8;font-size:13px;margin:20px 0 0;">You can create a new trade with adjusted terms.</p>`,
+      cta: "Create New Trade",
+    },
+    Resolved: {
+      to: null,
+      subject: "⚖️ Your Dispute Has Been Resolved",
+      title: "Dispute Resolved",
+      body: `
+        <p style="color:#94A3B8;font-size:15px;margin:0 0 20px;">The dispute for trade <strong style="color:#fff;">${trade.reference}</strong> has been resolved by our team.</p>
+        ${row("Item", trade.item_name)}
+        ${row("Amount", amount)}
+        <p style="color:#94A3B8;font-size:13px;margin:20px 0 0;">Please log in to view the resolution details and any funds released.</p>`,
+      cta: "View Resolution",
+    },
+  };
+
+  const tmpl = templates[status];
+  if (!tmpl) return;
+
+  if (status === "Disputed" || status === "Resolved") {
+    const html = emailTemplate(tmpl.title, tmpl.body, tmpl.cta, tradeUrl);
+    if (trade.buyer_email) await sendEmail(trade.buyer_email, tmpl.subject, html);
+    if (trade.seller_email) await sendEmail(trade.seller_email, tmpl.subject, html);
+  } else if (tmpl.to) {
+    const html = emailTemplate(tmpl.title, tmpl.body, tmpl.cta, tradeUrl);
+    await sendEmail(tmpl.to, tmpl.subject, html);
+  }
+}
+
+// ─── Wire email into trade lifecycle ─────────────────────────────────────────
+// Endpoint to manually trigger email for a trade status
+app.post("/api/trades/:id/send-notification", authenticate, async (req, res) => {
+  const { status } = req.body;
+  try {
+    const result = await pool.query("SELECT * FROM trades WHERE id = $1", [req.params.id]);
+    const trade = result.rows[0];
+    if (!trade) return res.status(404).json({ error: "Trade not found" });
+    await sendTradeNotification(trade, status);
+    res.json({ success: true, message: `Email notification sent for status: ${status}` });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ─── Test email endpoint ──────────────────────────────────────────────────────
+app.post("/api/test-email", authenticate, async (req, res) => {
+  const { to } = req.body;
+  if (!to) return res.status(400).json({ error: "Email address required" });
+  try {
+    await sendEmail(
+      to,
+      "✅ TrustGuard Email Test",
+      emailTemplate(
+        "Email is Working!",
+        `<p style="color:#94A3B8;font-size:15px;">This is a test email from your TrustGuard platform. If you received this, email notifications are working correctly!</p>`,
+        "Visit TrustGuard",
+        process.env.FRONTEND_URL || "http://localhost:5173"
+      )
+    );
+    res.json({ success: true, message: `Test email sent to ${to}` });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ─── Seller Accept / Reject Trade ────────────────────────────────────────────
+const ESCROW_BANKS = ["Sterling Bank", "Wema Bank", "Moniepoint", "GTBank", "First Bank", "Zenith Bank", "Access Bank", "UBA"];
+function generateVirtualAccount() { return "2" + Math.floor(Math.random() * 900000000 + 100000000); }
+
+app.post("/api/trades/:id/accept", authenticate, async (req, res) => {
+  try {
+    const result = await pool.query("SELECT * FROM trades WHERE id = $1", [req.params.id]);
+    const trade = result.rows[0];
+    if (!trade) return res.status(404).json({ error: "Trade not found" });
+    if (trade.seller_id !== req.user.id) return res.status(403).json({ error: "Only the seller can accept this trade" });
+    if (trade.status !== "Pending_Acceptance") return res.status(400).json({ error: "Trade is not pending acceptance" });
+
+    const bank = ESCROW_BANKS[Math.floor(Math.random() * ESCROW_BANKS.length)];
+    const account = generateVirtualAccount();
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
+    const updated = await pool.query(
+      `UPDATE trades SET
+        status = 'Awaiting_Payment',
+        accepted_at = NOW(),
+        updated_date = NOW(),
+        virtual_bank_name = $1,
+        virtual_account_number = $2,
+        virtual_account_expires_at = $3
+       WHERE id = $4 RETURNING *`,
+      [bank, account, expiresAt, req.params.id]
+    );
+
+    // Notify buyer
+    if (trade.buyer_id) {
+      await createNotification(trade.buyer_id, "Trade Accepted! 🎉",
+        `The seller has accepted your trade for "${trade.item_name}". Please fund the escrow to proceed.`,
+        "success", `/trades/${trade.id}`);
+    }
+
+    // Send email to buyer
+    await sendTradeNotification({ ...updated.rows[0], buyer_email: trade.buyer_email, seller_email: trade.seller_email }, "Accepted");
+
+    res.json(updated.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/trades/:id/reject", authenticate, async (req, res) => {
+  const { message } = req.body;
+  try {
+    const result = await pool.query("SELECT * FROM trades WHERE id = $1", [req.params.id]);
+    const trade = result.rows[0];
+    if (!trade) return res.status(404).json({ error: "Trade not found" });
+    if (trade.seller_id !== req.user.id) return res.status(403).json({ error: "Only the seller can reject this trade" });
+    if (trade.status !== "Pending_Acceptance") return res.status(400).json({ error: "Trade is not pending acceptance" });
+
+    const updated = await pool.query(
+      "UPDATE trades SET status = 'Rejected', rejected_at = NOW(), seller_message = $1, updated_date = NOW() WHERE id = $2 RETURNING *",
+      [message || null, req.params.id]
+    );
+
+    // Notify buyer
+    if (trade.buyer_id) {
+      await createNotification(trade.buyer_id, "Trade Rejected",
+        `The seller has rejected your trade for "${trade.item_name}".${message ? ` Reason: ${message}` : ""}`,
+        "error", `/trades/${trade.id}`);
+    }
+
+    // Send email to buyer
+    await sendTradeNotification({ ...updated.rows[0], buyer_email: trade.buyer_email, seller_email: trade.seller_email }, "Rejected");
+
+    res.json(updated.rows[0]);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+app.post("/api/trades/:id/request-modification", authenticate, async (req, res) => {
+  const { message } = req.body;
+  if (!message) return res.status(400).json({ error: "Message is required" });
+  try {
+    const result = await pool.query("SELECT * FROM trades WHERE id = $1", [req.params.id]);
+    const trade = result.rows[0];
+    if (!trade) return res.status(404).json({ error: "Trade not found" });
+    if (trade.seller_id !== req.user.id) return res.status(403).json({ error: "Only the seller can request modifications" });
+
+    await pool.query(
+      "UPDATE trades SET seller_message = $1, updated_date = NOW() WHERE id = $2",
+      [message, req.params.id]
+    );
+
+    // Notify buyer
+    if (trade.buyer_id) {
+      await createNotification(trade.buyer_id, "Seller Requested Modification",
+        `The seller has requested a modification on "${trade.item_name}": ${message}`,
+        "warning", `/trades/${trade.id}`);
+    }
+
+    res.json({ success: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});

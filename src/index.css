@@ -4,92 +4,143 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ==========================================================
+   TRUSTGUARD DESIGN TOKENS — single source of truth.
+   Stored as "R G B" triplets so Tailwind can do
+   rgb(var(--x) / <alpha-value>) and opacity modifiers work.
+   Default (no class) = LIGHT theme. .dark class = DARK theme.
+   ========================================================== */
 @layer base {
   :root {
-    --background: 214 50% 97%;
-    --foreground: 218 60% 12%;
-    --card: 0 0% 100%;
-    --card-foreground: 218 60% 12%;
-    --popover: 0 0% 100%;
-    --popover-foreground: 218 60% 12%;
-    --primary: 148 100% 32%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 218 60% 15%;
-    --secondary-foreground: 0 0% 100%;
-    --muted: 214 30% 93%;
-    --muted-foreground: 218 20% 45%;
-    --accent: 148 100% 32%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 214 25% 88%;
-    --input: 214 25% 88%;
-    --ring: 148 100% 32%;
-    --radius: 0.625rem;
-    --navy: 218 60% 15%;
-    --navy-foreground: 0 0% 100%;
-    --green: 148 100% 32%;
+    /* ---- LIGHT MODE ---- */
+    --background: 247 250 252;          /* #F7FAFC */
+    --background-secondary: 255 255 255; /* #FFFFFF */
+    --sidebar: 255 255 255;             /* #FFFFFF */
+    --navbar: 255 255 255;              /* #FFFFFF */
+    --card: 255 255 255;                /* #FFFFFF */
+    --card-hover: 241 245 249;          /* #F1F5F9 */
+
+    --primary: 8 185 95;                /* #08B95F */
+    --primary-hover: 7 168 85;          /* #07A855 */
+    --primary-foreground: 255 255 255;
+
+    --secondary: 226 232 240;           /* light border-ish surface */
+    --secondary-foreground: 14 29 54;
+
+    --success: 8 185 95;                /* #08B95F */
+    --danger: 239 68 68;                /* #EF4444 */
+    --warning: 245 158 11;              /* #F59E0B */
+    --info: 59 130 246;                 /* #3B82F6 */
+    --destructive: 239 68 68;
+    --destructive-foreground: 255 255 255;
+
+    --foreground: 14 29 54;             /* #0E1D36 */
+    --text: 14 29 54;
+    --text-secondary: 100 116 139;      /* #64748B */
+    --muted: 100 116 139;
+    --muted-foreground: 100 116 139;
+    --disabled: 160 174 192;
+
+    --card-foreground: 14 29 54;
+    --popover: 255 255 255;
+    --popover-foreground: 14 29 54;
+    --accent: 241 245 249;
+    --accent-foreground: 14 29 54;
+
+    --border: 226 232 240;              /* #E2E8F0 */
+    --border-light: 226 232 240;
+    --border-dark: 237 242 247;
+    --input: 226 232 240;
+    --ring: 8 185 95;
+
+    --sidebar-foreground: 100 116 139;
+    --sidebar-primary: 8 185 95;
+    --sidebar-primary-foreground: 255 255 255;
+    --sidebar-accent: 241 245 249;
+    --sidebar-accent-foreground: 14 29 54;
+    --sidebar-border: 226 232 240;
+    --sidebar-ring: 8 185 95;
+
+    --chart-1: 8 185 95;
+    --chart-2: 59 130 246;
+    --chart-3: 245 158 11;
+    --chart-4: 239 68 68;
+    --chart-5: 20 39 72;
+
+    --radius: 0.75rem;
     --font-heading: 'Inter', ui-sans-serif, system-ui, sans-serif;
     --font-body: 'Inter', ui-sans-serif, system-ui, sans-serif;
     --font-display: 'Inter', ui-sans-serif, system-ui, sans-serif;
     --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-    --sidebar-background: 218 60% 12%;
-    --sidebar-foreground: 214 30% 85%;
-    --sidebar-primary: 148 100% 32%;
-    --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 218 55% 18%;
-    --sidebar-accent-foreground: 214 30% 90%;
-    --sidebar-border: 218 50% 20%;
-    --sidebar-ring: 148 100% 32%;
-    --chart-1: 148 100% 32%;
-    --chart-2: 210 90% 55%;
-    --chart-3: 38 95% 55%;
-    --chart-4: 0 84% 60%;
-    --chart-5: 172 66% 45%;
   }
 
   .dark {
-    --background: 218 60% 8%;
-    --foreground: 214 30% 93%;
-    --card: 218 55% 12%;
-    --card-foreground: 214 30% 93%;
-    --popover: 218 55% 12%;
-    --popover-foreground: 214 30% 93%;
-    --primary: 148 100% 38%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 218 50% 20%;
-    --secondary-foreground: 214 30% 90%;
-    --muted: 218 50% 18%;
-    --muted-foreground: 214 20% 60%;
-    --accent: 148 100% 38%;
-    --accent-foreground: 0 0% 100%;
-    --destructive: 0 62% 40%;
-    --destructive-foreground: 0 0% 98%;
-    --border: 218 40% 22%;
-    --input: 218 40% 22%;
-    --ring: 148 100% 38%;
-    --sidebar-background: 218 60% 8%;
-    --sidebar-foreground: 214 30% 80%;
-    --sidebar-accent: 218 55% 14%;
-    --sidebar-accent-foreground: 214 30% 90%;
-    --sidebar-border: 218 50% 16%;
+    /* ---- DARK MODE ---- */
+    --background: 14 29 54;             /* #0E1D36 */
+    --background-secondary: 20 39 72;   /* #142748 */
+    --sidebar: 16 32 61;                /* #10203D */
+    --navbar: 17 34 65;                 /* #112241 */
+    --card: 22 42 71;                   /* #162A47 */
+    --card-hover: 26 49 82;             /* #1A3152 */
+
+    --primary: 8 185 95;                /* #08B95F */
+    --primary-hover: 7 168 85;          /* #07A855 */
+    --primary-foreground: 255 255 255;
+
+    --secondary: 20 39 72;
+    --secondary-foreground: 197 206 219;
+
+    --success: 8 185 95;
+    --danger: 239 68 68;
+    --warning: 245 158 11;
+    --info: 59 130 246;
+    --destructive: 239 68 68;
+    --destructive-foreground: 255 255 255;
+
+    --foreground: 255 255 255;
+    --text: 255 255 255;
+    --text-secondary: 197 206 219;      /* #C5CEDB */
+    --muted: 141 153 174;               /* #8D99AE */
+    --muted-foreground: 141 153 174;
+    --disabled: 102 112 133;            /* #667085 */
+
+    --card-foreground: 255 255 255;
+    --popover: 22 42 71;
+    --popover-foreground: 255 255 255;
+    --accent: 26 49 82;
+    --accent-foreground: 255 255 255;
+
+    --border: 255 255 255;              /* used with low alpha below */
+    --border-light: 255 255 255;
+    --border-dark: 255 255 255;
+    --input: 26 49 82;
+    --ring: 8 185 95;
+
+    --sidebar-foreground: 141 153 174;
+    --sidebar-primary: 8 185 95;
+    --sidebar-primary-foreground: 255 255 255;
+    --sidebar-accent: 26 49 82;
+    --sidebar-accent-foreground: 255 255 255;
+    --sidebar-border: 255 255 255;
+    --sidebar-ring: 8 185 95;
+
+    --chart-1: 8 185 95;
+    --chart-2: 59 130 246;
+    --chart-3: 245 158 11;
+    --chart-4: 239 68 68;
+    --chart-5: 197 206 219;
   }
 }
 
 @layer base {
-  * {
-    @apply border-border outline-ring/50;
-  }
-  body {
-    @apply bg-background text-foreground font-body;
-  }
+  * { @apply border-border; }
+  body { @apply bg-background text-foreground font-body; }
 }
 
+/* Dark-mode borders use white at low alpha per brand spec (rgba(255,255,255,0.08/0.04));
+   light-mode borders use solid --border. This utility layer supplies that behavior. */
 @layer utilities {
-  .navy { background-color: #0D1F3C; }
-  .text-navy { color: #0D1F3C; }
-  .bg-navy { background-color: #0D1F3C; }
-  .bg-trustgreen { background-color: #00A651; }
-  .text-trustgreen { color: #00A651; }
-  .border-trustgreen { border-color: #00A651; }
+  .dark .border-border { border-color: rgb(255 255 255 / 0.08); }
+  .dark .border-border-subtle { border-color: rgb(255 255 255 / 0.04); }
+  .border-border-subtle { border-color: rgb(var(--border-dark)); }
 }

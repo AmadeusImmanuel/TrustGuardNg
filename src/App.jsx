@@ -28,16 +28,30 @@ import AdminDisputes from './pages/AdminDisputes';
 import AdminWebhooks from './pages/AdminWebhooks';
 import AdminAllTrades from './pages/AdminAllTrades';
 import AdminSettings from './pages/AdminSettings';
+import About from './pages/About';
+import Help from './pages/Help';
+import Security from './pages/Security';
+import Blog from './pages/Blog';
+import Reputation from './pages/Reputation';
+import Profile from './pages/Profile';
+import NotificationsPage from './pages/NotificationsPage';
+import DisputeDetail from './pages/DisputeDetail';
+import AdminKYC from './pages/AdminKYC';
+import AdminAuditLogs from './pages/AdminAuditLogs';
+import AdminSupport from './pages/AdminSupport';
+import AdminFraud from './pages/AdminFraud';
+import Settings from './pages/Settings';
+import Support from './pages/Support';
 
 const AuthenticatedApp = () => {
   const { isLoadingAuth, isLoadingPublicSettings, authError, navigateToLogin } = useAuth();
 
   if (isLoadingPublicSettings || isLoadingAuth) {
     return (
-      <div className="fixed inset-0 flex items-center justify-center" style={{ background: "#0D1F3C" }}>
+      <div className="fixed inset-0 flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-4 border-white/20 border-t-[#00A651] rounded-full animate-spin" />
-          <span className="text-white/60 text-sm">Loading TrustGuard...</span>
+          <div className="w-10 h-10 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+          <span className="text-muted text-sm">Loading TrustGuard...</span>
         </div>
       </div>
     );
@@ -57,9 +71,6 @@ const AuthenticatedApp = () => {
       {/* Auth */}
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route path="/privacy" element={<Privacy />} />
-      <Route path="/terms" element={<Terms />} />
-      <Route path="/contact" element={<Contact />} />
       <Route path="/forgot-password" element={<ForgotPassword />} />
       <Route path="/reset-password" element={<ResetPassword />} />
 
@@ -81,6 +92,24 @@ const AuthenticatedApp = () => {
       <Route path="/admin/disputes" element={<AdminDisputes />} />
       <Route path="/admin/webhooks" element={<AdminWebhooks />} />
       <Route path="/admin/settings" element={<AdminSettings />} />
+      <Route path="/about" element={<About />} />
+      <Route path="/help" element={<Help />} />
+      <Route path="/security" element={<Security />} />
+      <Route path="/contact" element={<Contact />} />
+      <Route path="/terms" element={<Terms />} />
+      <Route path="/privacy" element={<Privacy />} />
+      <Route path="/blog" element={<Blog />} />
+      <Route path="/blog/:slug" element={<Blog />} />
+      <Route path="/reputation" element={<Reputation />} />
+      <Route path="/profile/:userId" element={<Profile />} />
+      <Route path="/notifications" element={<NotificationsPage />} />
+      <Route path="/disputes/:id" element={<DisputeDetail />} />
+      <Route path="/support" element={<Support />} />
+      <Route path="/admin/kyc" element={<AdminKYC />} />
+      <Route path="/admin/audit-logs" element={<AdminAuditLogs />} />
+      <Route path="/admin/support" element={<AdminSupport />} />
+      <Route path="/admin/fraud" element={<AdminFraud />} />
+      <Route path="/settings" element={<Settings />} />
 
       <Route path="*" element={<PageNotFound />} />
     </Routes>

@@ -41,25 +41,25 @@ export default function AdminSettings() {
   return (
     <AppLayout user={user}>
       <div className="max-w-2xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-black text-[#0D1F3C] mb-6">Platform Settings</h1>
+        <h1 className="text-2xl font-black text-foreground mb-6">Platform Settings</h1>
         {loading ? (
-          <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-gray-200 border-t-green-500 rounded-full animate-spin" /></div>
+          <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-border border-t-primary rounded-full animate-spin" /></div>
         ) : (
-          <div className="bg-white rounded-2xl border border-gray-100 p-6">
+          <div className="bg-card rounded-2xl border border-border p-6">
             <div className="flex items-center gap-3 mb-6">
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center" style={{ background: "#f0fff7" }}>
-                <Percent className="w-5 h-5 text-green-600" />
+              <div className="w-10 h-10 rounded-xl flex items-center justify-center bg-primary/10">
+                <Percent className="w-5 h-5 text-primary" />
               </div>
               <div>
-                <h2 className="font-bold text-[#0D1F3C]">Escrow Fee Rate</h2>
-                <p className="text-gray-500 text-sm">Applies to all new trades platform-wide.</p>
+                <h2 className="font-bold text-foreground">Escrow Fee Rate</h2>
+                <p className="text-muted text-sm">Applies to all new trades platform-wide.</p>
               </div>
             </div>
-            {error && <div className="mb-4 px-4 py-3 rounded-xl bg-red-50 text-red-600 text-sm">{error}</div>}
-            {saved && <div className="mb-4 px-4 py-3 rounded-xl bg-green-50 text-green-700 text-sm">Fee rate updated successfully.</div>}
+            {error && <div className="mb-4 px-4 py-3 rounded-xl bg-danger/10 text-danger text-sm">{error}</div>}
+            {saved && <div className="mb-4 px-4 py-3 rounded-xl bg-success/10 text-success text-sm">Fee rate updated successfully.</div>}
             <form onSubmit={handleSave} className="space-y-4">
               <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1.5">Fee Percentage (%)</label>
+                <label className="block text-sm font-semibold text-text-secondary mb-1.5">Fee Percentage (%)</label>
                 <input
                   type="number"
                   step="0.1"
@@ -68,16 +68,15 @@ export default function AdminSettings() {
                   required
                   value={feeRate}
                   onChange={(e) => setFeeRate(e.target.value)}
-                  className="w-full px-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:outline-none focus:border-green-500"
+                  className="w-full px-4 py-2.5 rounded-xl border border-border bg-background text-foreground text-sm focus:outline-none focus:border-primary"
                   placeholder="1.5"
                 />
-                <p className="text-gray-400 text-xs mt-1.5">Current rate: {feeRate}% on every new trade. Existing trades keep the rate they were created with.</p>
+                <p className="text-muted text-xs mt-1.5">Current rate: {feeRate}% on every new trade. Existing trades keep the rate they were created with.</p>
               </div>
               <button
                 type="submit"
                 disabled={saving}
-                className="px-6 py-3 rounded-full text-white font-bold text-sm disabled:opacity-60"
-                style={{ background: "#00A651" }}
+                className="px-6 py-3 rounded-full text-primary-foreground font-bold text-sm disabled:opacity-60 bg-primary hover:bg-primary-hover transition-colors"
               >
                 {saving ? "Saving..." : "Save Fee Rate"}
               </button>

@@ -1,7 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { auth, User, Trade, Dispute, WebhookEvent, Transaction } from "@/api/base44Client";
 import AppLayout from "@/components/AppLayout";
-import { Users, ArrowLeftRight, AlertTriangle, Webhook } from "lucide-react";
+import { motion } from "framer-motion";
+import MetricCard from "@/components/ui/MetricCard";
+import { Users, ArrowLeftRight, AlertTriangle, Webhook, TrendingUp, DollarSign } from "lucide-react";
 import DailyEscrowVolumeChart from "@/components/admin/DailyEscrowVolumeChart";
 import TradeVolumeChart from "@/components/admin/TradeVolumeChart";
 import DisputeRateChart from "@/components/admin/DisputeRateChart";
@@ -27,7 +29,8 @@ export default function AdminDashboard() {
         setDisputes(allDisputes);
         setTransactions(txns);
         setStats({
-          users: users.length, trades: allTrades.length, disputes: allDisputes.length, webhooks: webhooks.length,
+          users: users.length, trades: allTrades.length,
+          disputes: allDisputes.length, webhooks: webhooks.length,
           volume: allTrades.reduce((s, t) => s + (Number(t.amount) || 0), 0),
           fees: allTrades.reduce((s, t) => s + (Number(t.calculated_fee) || 0), 0),
         });
@@ -36,34 +39,29 @@ export default function AdminDashboard() {
     })();
   }, []);
 
-  const fmt = (v) => "₦" + (Number(v) || 0).toLocaleString("en-NG", { minimumFractionDigits: 2 });
-  const cards = [
-    { label: "Total Users", value: stats.users, icon: Users, color: "#0D1F3C" },
-    { label: "Total Trades", value: stats.trades, icon: ArrowLeftRight, color: "#163560" },
-    { label: "Disputes", value: stats.disputes, icon: AlertTriangle, color: "#dc2626" },
-    { label: "Webhooks", value: stats.webhooks, icon: Webhook, color: "#7c3aed" },
-    { label: "Total Volume", value: fmt(stats.volume), icon: ArrowLeftRight, color: "#00A651" },
-    { label: "Fees Collected", value: fmt(stats.fees), icon: ArrowLeftRight, color: "#059669" },
-  ];
+  const fmt = (v) => "₦" + (Number(v) || 0).toLocaleString("en-NG", { minimumFractionDigits: 0 });
 
   return (
     <AppLayout user={user}>
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <h1 className="text-2xl font-black text-[#0D1F3C] mb-8">Admin Dashboard</h1>
+      <div className="px-4 lg:px-8 py-6 max-w-7xl mx-auto">
+        <motion.div initial={{ opacity: 0, y: -8 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
+          <h1 className="text-2xl font-black text-foreground">Admin Dashboard</h1>
+          <p className="text-muted text-sm mt-1">Platform overview and analytics</p>
+        </motion.div>
+
         {loading ? (
-          <div className="flex justify-center py-20"><div className="w-8 h-8 border-4 border-gray-200 border-t-green-500 rounded-full animate-spin" /></div>
+          <div className="flex justify-center py-20">
+            <div className="w-8 h-8 border-2 border-border border-t-primary rounded-full animate-spin" />
+          </div>
         ) : (
           <>
             <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-8">
-              {cards.map(({ label, value, icon: Icon, color }) => (
-                <div key={label} className="bg-white rounded-2xl border border-gray-100 p-6 shadow-sm">
-                  <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-4" style={{ background: color + "15" }}>
-                    <Icon className="w-5 h-5" style={{ color }} />
-                  </div>
-                  <div className="text-3xl font-black text-[#0D1F3C]">{value}</div>
-                  <div className="text-gray-400 text-sm mt-1">{label}</div>
-                </div>
-              ))}
+              <MetricCard icon={Users} label="Total Users" value={stats.users} description="Registered accounts" tone="primary" delay={0} />
+              <MetricCard icon={ArrowLeftRight} label="Total Trades" value={stats.trades} description="All time" tone="info" delay={0.05} />
+              <MetricCard icon={AlertTriangle} label="Disputes" value={stats.disputes} description="Raised by users" tone="danger" delay={0.1} />
+              <MetricCard icon={Webhook} label="Webhooks" value={stats.webhooks} description="Payment events" tone="info" delay={0.15} />
+              <MetricCard icon={TrendingUp} label="Total Volume" value={fmt(stats.volume)} description="Escrow processed" tone="primary" delay={0.2} />
+              <MetricCard icon={DollarSign} label="Fees Collected" value={fmt(stats.fees)} description="Platform revenue" tone="warning" delay={0.25} />
             </div>
             <div className="space-y-6">
               <DailyEscrowVolumeChart trades={trades} />

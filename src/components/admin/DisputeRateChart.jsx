@@ -26,15 +26,15 @@ export default function DisputeRateChart({ trades, disputes }) {
   const data = Object.values(weeks);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-6">
-      <h3 className="font-bold text-[#0D1F3C] mb-1">Disputes vs Trades (8 weeks)</h3>
-      <p className="text-gray-400 text-xs mb-4">Weekly comparison of disputes raised</p>
+    <div className="rounded-2xl border p-6" style={{ background: "#111827", borderColor: "rgba(255,255,255,0.06)" }}>
+      <h3 className="font-bold text-white mb-1">Disputes vs Trades (8 weeks)</h3>
+      <p className="text-slate-500 text-xs mb-4">Weekly comparison of disputes raised</p>
       <ResponsiveContainer width="100%" height={200}>
         <BarChart data={data} barSize={12}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
           <XAxis dataKey="week" tick={{ fontSize: 10, fill: "#9ca3af" }} tickLine={false} />
           <YAxis tick={{ fontSize: 10, fill: "#9ca3af" }} tickLine={false} axisLine={false} />
-          <Tooltip contentStyle={{ borderRadius: 10, border: "1px solid #f0f0f0" }} labelStyle={{ fontSize: 11 }} />
+          <Tooltip contentStyle={{ background: "#1A2235", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, fontSize: 12, color: "#fff" }} labelStyle={{ fontSize: 11 }} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <Bar dataKey="trades" name="Trades" fill="#0D1F3C" radius={[4, 4, 0, 0]} />
           <Bar dataKey="disputes" name="Disputes" fill="#dc2626" radius={[4, 4, 0, 0]} />

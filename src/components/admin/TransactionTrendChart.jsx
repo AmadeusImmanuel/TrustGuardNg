@@ -23,15 +23,15 @@ export default function TransactionTrendChart({ transactions }) {
   const fmt = (v) => "₦" + (v / 1000).toFixed(0) + "k";
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-6">
-      <h3 className="font-bold text-[#0D1F3C] mb-1">Transaction Trends (14 days)</h3>
-      <p className="text-gray-400 text-xs mb-4">Inflows vs payouts daily</p>
+    <div className="rounded-2xl border p-6" style={{ background: "#111827", borderColor: "rgba(255,255,255,0.06)" }}>
+      <h3 className="font-bold text-white mb-1">Transaction Trends (14 days)</h3>
+      <p className="text-slate-500 text-xs mb-4">Inflows vs payouts daily</p>
       <ResponsiveContainer width="100%" height={200}>
         <LineChart data={data}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
           <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#9ca3af" }} tickLine={false} interval={3} />
           <YAxis tickFormatter={fmt} tick={{ fontSize: 10, fill: "#9ca3af" }} tickLine={false} axisLine={false} />
-          <Tooltip formatter={(v) => "₦" + v.toLocaleString("en-NG")} contentStyle={{ borderRadius: 10, border: "1px solid #f0f0f0" }} labelStyle={{ fontSize: 11 }} />
+          <Tooltip formatter={(v) => "₦" + v.toLocaleString("en-NG")} contentStyle={{ background: "#1A2235", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, fontSize: 12, color: "#fff" }} labelStyle={{ fontSize: 11 }} />
           <Legend wrapperStyle={{ fontSize: 11 }} />
           <Line type="monotone" dataKey="inflow" name="Inflow" stroke="#00A651" strokeWidth={2} dot={false} />
           <Line type="monotone" dataKey="payout" name="Payout" stroke="#2563eb" strokeWidth={2} dot={false} />

@@ -1,21 +1,22 @@
 import React from "react";
 
 const config = {
-  Draft: { label: "Draft", bg: "#f3f4f6", color: "#6b7280" },
-  Awaiting_Payment: { label: "Awaiting Payment", bg: "#f3f4f6", color: "#6b7280" },
-  Funded: { label: "Funded", bg: "#eff6ff", color: "#2563eb" },
-  Shipped: { label: "Shipped", bg: "#fffbeb", color: "#d97706" },
-  Confirmed: { label: "Confirmed", bg: "#f0fff4", color: "#16a34a" },
-  Disputed: { label: "Disputed", bg: "#fef2f2", color: "#dc2626" },
-  Resolved: { label: "Resolved", bg: "#f0fdfa", color: "#0d9488" },
+  Draft: { label: "Draft", className: "bg-card-hover text-muted" },
+  Pending_Acceptance: { label: "Pending Acceptance", className: "bg-warning/10 text-warning" },
+  Rejected: { label: "Rejected", className: "bg-danger/10 text-danger" },
+  Awaiting_Payment: { label: "Awaiting Payment", className: "bg-warning/10 text-warning" },
+  Funded: { label: "Funded", className: "bg-info/10 text-info" },
+  Shipped: { label: "Shipped", className: "bg-info/10 text-info" },
+  Confirmed: { label: "Confirmed", className: "bg-success/10 text-success" },
+  Disputed: { label: "Disputed", className: "bg-danger/10 text-danger" },
+  Resolved: { label: "Resolved", className: "bg-success/10 text-success" },
 };
 
 export default function StatusBadge({ status, className = "" }) {
-  const c = config[status] || { label: status, bg: "#f3f4f6", color: "#6b7280" };
+  const c = config[status] || { label: status, className: "bg-card-hover text-muted" };
   return (
     <span
-      className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${className}`}
-      style={{ background: c.bg, color: c.color }}
+      className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold ${c.className} ${className}`}
     >
       {c.label}
     </span>

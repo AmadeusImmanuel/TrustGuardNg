@@ -29,3 +29,7 @@ dist-ssr
 
 .env
 .vite
+
+# Uploaded evidence files — real user content, not source
+trust-guard-backend/uploads/*
+!trust-guard-backend/uploads/evidence/.gitkeep

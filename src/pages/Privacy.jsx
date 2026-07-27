@@ -2,140 +2,39 @@ import React from "react";
 import LandingNav from "@/components/landing/LandingNav";
 import LandingFooter from "@/components/landing/LandingFooter";
 
+const sections = [
+  { title: "Information We Collect", content: "We collect information you provide directly: name, email, phone number, BVN, NIN, government ID, and bank account details for KYC verification. We also collect transactional data (trade amounts, timestamps, trade partners) and device information (IP address, browser type, device fingerprint) for security purposes." },
+  { title: "How We Use Your Information", content: "Your information is used to: verify your identity and prevent fraud, process escrow transactions, resolve disputes, send transaction notifications, improve our platform, and comply with Nigerian financial regulations (CBN, NDIC, NFIU). We never use your data for advertising purposes." },
+  { title: "Data Sharing", content: "We do not sell your personal data. We may share data with: Nigerian regulatory authorities when legally required, licensed banks for payment processing, identity verification partners (for NIN/BVN verification), and our cloud infrastructure providers under strict data processing agreements." },
+  { title: "Data Security", content: "All personal data is encrypted using AES-256 at rest and TLS 1.3 in transit. Access to your data is restricted to authorized personnel only. We conduct regular security audits and penetration testing. In the event of a data breach, we will notify affected users within 72 hours as required by NDPR." },
+  { title: "Data Retention", content: "We retain your transaction data for 7 years as required by Nigerian financial regulations. Account data is retained for 3 years after account closure. You may request deletion of non-essential data by contacting our privacy team." },
+  { title: "Your Rights", content: "Under the Nigeria Data Protection Regulation (NDPR), you have the right to: access your personal data, correct inaccurate data, request deletion of your data (where legally permissible), object to processing, and lodge a complaint with NITDA. Contact privacy@trustguard.ng to exercise these rights." },
+  { title: "Cookies", content: "We use essential cookies for authentication and security. We do not use tracking or advertising cookies. You can disable cookies in your browser settings, but this may affect platform functionality." },
+  { title: "Contact", content: "For privacy-related inquiries, contact our Data Protection Officer at privacy@trustguard.ng or write to: Amadeus Cybernetics Limited, Data Protection Officer, Victoria Island, Lagos, Nigeria." },
+];
+
 export default function Privacy() {
   return (
-    <div className="min-h-screen bg-white font-body">
+    <div className="min-h-screen bg-white">
       <LandingNav />
-
-      <section
-        className="relative py-20 px-6"
-        style={{
-          background: "linear-gradient(135deg, #0D1F3C 0%, #0a1628 60%, #061020 100%)"
-        }}
-      >
-        <div className="max-w-4xl mx-auto text-center">
-          <h1 className="text-4xl md:text-5xl font-black text-white mb-4 tracking-tight">
-            Privacy Policy
-          </h1>
-          <p className="text-white/70 text-lg">Last updated: June 27, 2026</p>
+      <section className="pt-32 pb-16 text-white text-center" style={{ background: "#0D1F3C" }}>
+        <div className="max-w-3xl mx-auto px-6">
+          <h1 className="text-5xl font-black mb-4">Privacy Policy</h1>
+          <p className="text-white/60">Last updated: January 1, 2026 · NDPR Compliant</p>
         </div>
       </section>
-
-      <section className="py-16 px-6">
-        <div className="max-w-3xl mx-auto prose prose-slate">
-          <p className="text-gray-700 leading-relaxed mb-6">
-            TrustGuard Nigeria ("TrustGuard," "we," "us," or "our") respects your privacy.
-            This Privacy Policy explains what information we collect, how we use it, and
-            the choices you have when you use our escrow platform (the "Service").
-          </p>
-
-          <h2 className="text-2xl font-bold mt-10 mb-4" style={{ color: "#0D1F3C" }}>
-            1. Information We Collect
-          </h2>
-          <p className="text-gray-700 leading-relaxed mb-4">
-            We collect information you provide directly, including:
-          </p>
-          <ul className="list-disc pl-6 text-gray-700 leading-relaxed mb-6 space-y-2">
-            <li>Account details: full name, email address, phone number, and password.</li>
-            <li>
-              Identity verification (KYC) data: Bank Verification Number (BVN) and National
-              Identification Number (NIN), collected only when required to verify your
-              identity for withdrawals above our verification threshold.
-            </li>
-            <li>Transaction data: trade details, amounts, payment references, and trade history.</li>
-            <li>
-              Communications: messages you send us, dispute details, and support requests.
-            </li>
-          </ul>
-
-          <h2 className="text-2xl font-bold mt-10 mb-4" style={{ color: "#0D1F3C" }}>
-            2. How We Use Your Information
-          </h2>
-          <ul className="list-disc pl-6 text-gray-700 leading-relaxed mb-6 space-y-2">
-            <li>To create and manage your account.</li>
-            <li>To facilitate escrow transactions between buyers and sellers.</li>
-            <li>To verify your identity and comply with anti-fraud and KYC obligations.</li>
-            <li>To process payments, withdrawals, and refunds.</li>
-            <li>To investigate and resolve disputes.</li>
-            <li>To send you transactional notifications (email, SMS, WhatsApp) about your trades.</li>
-            <li>To improve and secure the Service.</li>
-          </ul>
-
-          <h2 className="text-2xl font-bold mt-10 mb-4" style={{ color: "#0D1F3C" }}>
-            3. How We Share Your Information
-          </h2>
-          <p className="text-gray-700 leading-relaxed mb-4">
-            We do not sell your personal information. We may share information with:
-          </p>
-          <ul className="list-disc pl-6 text-gray-700 leading-relaxed mb-6 space-y-2">
-            <li>Payment processors (such as Paystack) to process payments and withdrawals.</li>
-            <li>
-              Identity verification providers to confirm BVN/NIN details where legally
-              required.
-            </li>
-            <li>
-              The other party in a trade, limited to information necessary to complete that
-              specific transaction (such as a name or delivery confirmation).
-            </li>
-            <li>Law enforcement or regulators, where required by Nigerian law.</li>
-          </ul>
-
-          <h2 className="text-2xl font-bold mt-10 mb-4" style={{ color: "#0D1F3C" }}>
-            4. Data Security
-          </h2>
-          <p className="text-gray-700 leading-relaxed mb-6">
-            We use industry-standard measures, including encrypted connections and secure
-            password storage, to protect your information. However, no system is completely
-            secure, and we encourage you to use a strong, unique password and to never share
-            your login credentials with anyone — TrustGuard staff will never ask for your
-            password.
-          </p>
-
-          <h2 className="text-2xl font-bold mt-10 mb-4" style={{ color: "#0D1F3C" }}>
-            5. Data Retention
-          </h2>
-          <p className="text-gray-700 leading-relaxed mb-6">
-            We retain your information for as long as your account is active, and for a
-            reasonable period afterward to comply with legal, accounting, or dispute
-            resolution requirements.
-          </p>
-
-          <h2 className="text-2xl font-bold mt-10 mb-4" style={{ color: "#0D1F3C" }}>
-            6. Your Rights
-          </h2>
-          <p className="text-gray-700 leading-relaxed mb-6">
-            You may request access to, correction of, or deletion of your personal
-            information, subject to our legal and regulatory obligations (for example, we
-            may need to retain transaction records for a minimum period). To make a request,
-            contact us using the details below.
-          </p>
-
-          <h2 className="text-2xl font-bold mt-10 mb-4" style={{ color: "#0D1F3C" }}>
-            7. Changes to This Policy
-          </h2>
-          <p className="text-gray-700 leading-relaxed mb-6">
-            We may update this Privacy Policy from time to time. We will notify you of
-            material changes by posting the updated policy on this page with a new
-            "Last updated" date.
-          </p>
-
-          <h2 className="text-2xl font-bold mt-10 mb-4" style={{ color: "#0D1F3C" }}>
-            8. Contact Us
-          </h2>
-          <p className="text-gray-700 leading-relaxed mb-6">
-            If you have questions about this Privacy Policy, contact us at{" "}
-            <a
-              href="mailto:support@trustguardng.com"
-              className="font-semibold hover:underline"
-              style={{ color: "#00A651" }}
-            >
-              support@trustguardng.com
-            </a>
-            .
-          </p>
+      <section className="py-16">
+        <div className="max-w-3xl mx-auto px-6">
+          <div className="space-y-8">
+            {sections.map(({ title, content }) => (
+              <div key={title} className="border-b border-gray-100 pb-8">
+                <h2 className="text-xl font-black text-[#0D1F3C] mb-3">{title}</h2>
+                <p className="text-gray-600 leading-relaxed">{content}</p>
+              </div>
+            ))}
+          </div>
         </div>
       </section>
-
       <LandingFooter />
     </div>
   );

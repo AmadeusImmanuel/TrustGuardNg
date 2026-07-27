@@ -33,15 +33,15 @@ export default function DailyEscrowVolumeChart({ trades }) {
   const totalCompleted = data.reduce((s, d) => s + d.completed, 0);
 
   return (
-    <div className="bg-white rounded-2xl border border-gray-100 p-6">
+    <div className="rounded-2xl border p-6" style={{ background: "#111827", borderColor: "rgba(255,255,255,0.06)" }}>
       <div className="flex items-center justify-between mb-1">
-        <h3 className="font-bold text-[#0D1F3C]">Daily Escrow Volume</h3>
+        <h3 className="font-bold text-white">Daily Escrow Volume</h3>
         <div className="flex items-center gap-4 text-xs text-gray-400">
           <span>Total: <strong className="text-[#0D1F3C]">₦{totalVolume.toLocaleString("en-NG")}</strong></span>
           <span>Completed: <strong className="text-[#00A651]">{totalCompleted}</strong></span>
         </div>
       </div>
-      <p className="text-gray-400 text-xs mb-4">Daily escrow value with active vs completed trade counts</p>
+      <p className="text-slate-500 text-xs mb-4">Daily escrow value with active vs completed trade counts</p>
       <ResponsiveContainer width="100%" height={280}>
         <ComposedChart data={data}>
           <defs>
@@ -50,7 +50,7 @@ export default function DailyEscrowVolumeChart({ trades }) {
               <stop offset="95%" stopColor="#00A651" stopOpacity={0.2} />
             </linearGradient>
           </defs>
-          <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" vertical={false} />
+          <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" vertical={false} />
           <XAxis dataKey="date" tick={{ fontSize: 10, fill: "#9ca3af" }} tickLine={false} interval={6} />
           <YAxis yAxisId="left" tickFormatter={fmtNaira} tick={{ fontSize: 10, fill: "#9ca3af" }} tickLine={false} axisLine={false} />
           <YAxis yAxisId="right" orientation="right" tick={{ fontSize: 10, fill: "#9ca3af" }} tickLine={false} axisLine={false} allowDecimals={false} />
@@ -59,7 +59,7 @@ export default function DailyEscrowVolumeChart({ trades }) {
               if (name === "volume") return ["₦" + Number(v).toLocaleString("en-NG"), "Escrow Volume"];
               return [v, name === "active" ? "Active Trades" : "Completed Trades"];
             }}
-            contentStyle={{ borderRadius: 10, border: "1px solid #f0f0f0" }}
+            contentStyle={{ background: "#1A2235", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, fontSize: 12, color: "#fff" }}
             labelStyle={{ fontSize: 11, fontWeight: 600 }}
           />
           <Legend wrapperStyle={{ fontSize: 11 }} />
