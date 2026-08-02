@@ -15,21 +15,21 @@ const sections = [
 
 export default function Privacy() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       <LandingNav />
-      <section className="pt-32 pb-16 text-white text-center" style={{ background: "#0D1F3C" }}>
+      <section className="pt-32 pb-16 text-primary-foreground text-center bg-brand-gradient">
         <div className="max-w-3xl mx-auto px-6">
           <h1 className="text-5xl font-black mb-4">Privacy Policy</h1>
           <p className="text-white/60">Last updated: January 1, 2026 · NDPR Compliant</p>
         </div>
       </section>
-      <section className="py-16">
+      <section className="py-16 bg-background">
         <div className="max-w-3xl mx-auto px-6">
           <div className="space-y-8">
             {sections.map(({ title, content }) => (
-              <div key={title} className="border-b border-gray-100 pb-8">
-                <h2 className="text-xl font-black text-[#0D1F3C] mb-3">{title}</h2>
-                <p className="text-gray-600 leading-relaxed">{content}</p>
+              <div key={title} className="border-b border-border pb-8">
+                <h2 className="text-xl font-black text-foreground mb-3">{title}</h2>
+                <p className="text-text-secondary leading-relaxed">{content}</p>
               </div>
             ))}
           </div>

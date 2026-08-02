@@ -17,33 +17,30 @@ const sections = [
 
 export default function Terms() {
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       <LandingNav />
-      <section className="pt-32 pb-16 text-white text-center" style={{ background: "#0D1F3C" }}>
+      <section className="pt-32 pb-16 text-primary-foreground text-center bg-brand-gradient">
         <div className="max-w-3xl mx-auto px-6">
           <h1 className="text-5xl font-black mb-4">Terms of Service</h1>
           <p className="text-white/60">Last updated: January 1, 2026</p>
         </div>
-        <div className="absolute bottom-0 left-0 right-0">
-          <svg viewBox="0 0 1440 40" fill="none"><path d="M0 40L1440 40L1440 20C1200 40 720 0 0 20L0 40Z" fill="white" /></svg>
-        </div>
       </section>
-      <section className="py-16">
+      <section className="py-16 bg-background">
         <div className="max-w-3xl mx-auto px-6">
-          <div className="bg-amber-50 border border-amber-200 rounded-2xl p-6 mb-10">
-            <p className="text-amber-800 text-sm font-semibold">Important Notice</p>
-            <p className="text-amber-700 text-sm mt-1">Please read these terms carefully before using TrustGuard. By using our platform, you agree to be legally bound by these terms.</p>
+          <div className="bg-warning/10 border border-warning/30 rounded-2xl p-6 mb-10">
+            <p className="text-warning text-sm font-semibold">Important Notice</p>
+            <p className="text-text-secondary text-sm mt-1">Please read these terms carefully before using TrustGuard. By using our platform, you agree to be legally bound by these terms.</p>
           </div>
           <div className="space-y-8">
             {sections.map(({ title, content }) => (
-              <div key={title} className="border-b border-gray-100 pb-8">
-                <h2 className="text-xl font-black text-[#0D1F3C] mb-3">{title}</h2>
-                <p className="text-gray-600 leading-relaxed">{content}</p>
+              <div key={title} className="border-b border-border pb-8">
+                <h2 className="text-xl font-black text-foreground mb-3">{title}</h2>
+                <p className="text-text-secondary leading-relaxed">{content}</p>
               </div>
             ))}
           </div>
-          <div className="mt-10 p-6 rounded-2xl bg-gray-50 text-center">
-            <p className="text-gray-500 text-sm">Questions about these terms? <a href="/contact" className="font-semibold" style={{ color: "#00A651" }}>Contact our legal team</a></p>
+          <div className="mt-10 p-6 rounded-2xl bg-card-hover text-center">
+            <p className="text-muted text-sm">Questions about these terms? <a href="/contact" className="font-semibold text-primary">Contact our legal team</a></p>
           </div>
         </div>
       </section>

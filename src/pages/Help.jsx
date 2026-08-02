@@ -32,34 +32,29 @@ export default function Help() {
   });
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-background">
       <LandingNav />
       {/* Hero */}
-      <section className="pt-32 pb-16 text-center text-white relative overflow-hidden"
-        style={{ background: "linear-gradient(135deg, #0D1F3C 0%, #163560 100%)" }}>
+      <section className="pt-32 pb-16 text-center text-primary-foreground relative overflow-hidden bg-brand-gradient">
         <div className="max-w-3xl mx-auto px-6">
           <h1 className="text-5xl font-black mb-4">Help Center</h1>
           <p className="text-white/60 mb-8">Find answers to common questions about TrustGuard.</p>
           <div className="relative max-w-xl mx-auto">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
             <input value={search} onChange={e => setSearch(e.target.value)}
-              className="w-full pl-12 pr-4 py-4 rounded-2xl text-gray-800 text-sm focus:outline-none shadow-lg"
+              className="w-full pl-12 pr-4 py-4 rounded-2xl bg-card text-foreground text-sm focus:outline-none shadow-elevated"
               placeholder="Search for help..." />
           </div>
         </div>
-        <div className="absolute bottom-0 left-0 right-0">
-          <svg viewBox="0 0 1440 40" fill="none"><path d="M0 40L1440 40L1440 20C1200 40 720 0 0 20L0 40Z" fill="white" /></svg>
-        </div>
       </section>
 
-      <section className="py-16">
+      <section className="py-16 bg-background">
         <div className="max-w-4xl mx-auto px-6">
           {/* Category tabs */}
           <div className="flex gap-2 flex-wrap mb-10">
             {["All", ...categories].map(cat => (
               <button key={cat} onClick={() => setActiveCategory(cat)}
-                className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeCategory === cat ? "text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"}`}
-                style={activeCategory === cat ? { background: "#00A651" } : {}}>
+                className={`px-4 py-2 rounded-full text-sm font-semibold transition-all ${activeCategory === cat ? "text-primary-foreground bg-primary" : "bg-card-hover text-text-secondary hover:bg-card"}`}>
                 {cat}
               </button>
             ))}
@@ -68,24 +63,24 @@ export default function Help() {
           {/* FAQ accordion */}
           <div className="space-y-3 mb-16">
             {filtered.map((faq, i) => (
-              <div key={i} className="border border-gray-100 rounded-2xl overflow-hidden hover:border-green-200 transition-colors">
+              <div key={i} className="border border-border rounded-2xl overflow-hidden hover:border-primary/30 transition-colors">
                 <button onClick={() => setOpenIndex(openIndex === i ? null : i)}
-                  className="w-full flex items-center justify-between p-5 text-left bg-white hover:bg-gray-50 transition-colors">
+                  className="w-full flex items-center justify-between p-5 text-left bg-card hover:bg-card-hover transition-colors">
                   <div>
-                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full mr-3" style={{ background: "#f0fff7", color: "#00A651" }}>{faq.category}</span>
-                    <span className="font-semibold text-[#0D1F3C] text-sm">{faq.q}</span>
+                    <span className="text-xs font-semibold px-2 py-0.5 rounded-full mr-3 bg-primary/10 text-primary">{faq.category}</span>
+                    <span className="font-semibold text-foreground text-sm">{faq.q}</span>
                   </div>
-                  {openIndex === i ? <ChevronUp className="w-5 h-5 text-gray-400 shrink-0 ml-4" /> : <ChevronDown className="w-5 h-5 text-gray-400 shrink-0 ml-4" />}
+                  {openIndex === i ? <ChevronUp className="w-5 h-5 text-muted shrink-0 ml-4" /> : <ChevronDown className="w-5 h-5 text-muted shrink-0 ml-4" />}
                 </button>
                 {openIndex === i && (
-                  <div className="px-5 pb-5 text-gray-600 text-sm leading-relaxed border-t border-gray-50 bg-white">
+                  <div className="px-5 pb-5 text-text-secondary text-sm leading-relaxed border-t border-border bg-card">
                     <div className="pt-4">{faq.a}</div>
                   </div>
                 )}
               </div>
             ))}
             {filtered.length === 0 && (
-              <div className="text-center py-16 text-gray-400">
+              <div className="text-center py-16 text-muted">
                 <Search className="w-12 h-12 mx-auto mb-4 opacity-30" />
                 <p>No results found for "{search}"</p>
               </div>
@@ -93,22 +88,22 @@ export default function Help() {
           </div>
 
           {/* Contact options */}
-          <div className="bg-gray-50 rounded-3xl p-10 text-center">
-            <h2 className="text-2xl font-black text-[#0D1F3C] mb-2">Still need help?</h2>
-            <p className="text-gray-500 mb-8">Our support team is available 24/7.</p>
+          <div className="bg-card-hover rounded-3xl p-10 text-center">
+            <h2 className="text-2xl font-black text-foreground mb-2">Still need help?</h2>
+            <p className="text-muted mb-8">Our support team is available 24/7.</p>
             <div className="grid md:grid-cols-3 gap-4">
               {[
                 { icon: MessageCircle, label: "Live Chat", sub: "Avg reply: 2 minutes", action: "Start Chat" },
                 { icon: Mail, label: "Email Support", sub: "support@trustguard.ng", action: "Send Email" },
                 { icon: Phone, label: "Phone Support", sub: "+234 800 TRUST", action: "Call Now" },
               ].map(({ icon: Icon, label, sub, action }) => (
-                <div key={label} className="bg-white rounded-2xl p-6 border border-gray-100 shadow-sm hover:shadow-md transition-all cursor-pointer group">
-                  <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform" style={{ background: "#f0fff7" }}>
-                    <Icon className="w-6 h-6" style={{ color: "#00A651" }} />
+                <div key={label} className="bg-card rounded-2xl p-6 border border-border shadow-sm hover:shadow-elevated transition-shadow cursor-pointer group">
+                  <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto mb-3 group-hover:scale-110 transition-transform bg-primary/10">
+                    <Icon className="w-6 h-6 text-primary" />
                   </div>
-                  <div className="font-bold text-[#0D1F3C] mb-1">{label}</div>
-                  <div className="text-gray-400 text-xs mb-3">{sub}</div>
-                  <button className="px-4 py-2 rounded-full text-white text-xs font-semibold" style={{ background: "#00A651" }}>{action}</button>
+                  <div className="font-bold text-foreground mb-1">{label}</div>
+                  <div className="text-muted text-xs mb-3">{sub}</div>
+                  <button className="px-4 py-2 rounded-full text-primary-foreground text-xs font-semibold bg-primary hover:bg-primary-hover transition-colors">{action}</button>
                 </div>
               ))}
             </div>
