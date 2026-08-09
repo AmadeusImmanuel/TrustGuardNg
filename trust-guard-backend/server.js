@@ -132,12 +132,25 @@ app.get("/api/auth/me", authenticate, async (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-function crudRouter(table, allowedFields) {
+function crudRouter(table, allowedFields, options = {}) {
+  // options:
+  //   selectColumns: explicit column list for SELECT (defaults to * — only
+  //     override this for tables with sensitive columns like users, where
+  //     SELECT * would leak password_hash / reset_token to any caller).
+  //   adminOnlyFields: subset of allowedFields that only an admin may set,
+  //     even when editing their own row (e.g. wallet_balance, role, status).
+  //   requireOwnerOrAdmin: if true, PUT/DELETE require req.user.id === :id
+  //     or req.user.role === 'admin'. Off by default to preserve existing
+  //     behavior on tables without a simple id-based ownership concept.
   const router = express.Router();
+  const selectCols = options.selectColumns ? options.selectColumns.join(", ") : "*";
+  const adminOnlyFields = options.adminOnlyFields || [];
+  const requireOwnerOrAdmin = !!options.requireOwnerOrAdmin;
+
   router.get("/", authenticate, async (req, res) => {
     try {
       const { limit = 100, offset = 0, ...filters } = req.query;
-      let query = "SELECT * FROM " + table;
+      let query = "SELECT " + selectCols + " FROM " + table;
       const values = [];
       const conditions = [];
       Object.entries(filters).forEach(([k, v], i) => {
@@ -152,14 +165,14 @@ function crudRouter(table, allowedFields) {
   });
   router.get("/:id", authenticate, async (req, res) => {
     try {
-      const result = await pool.query("SELECT * FROM " + table + " WHERE id = $1", [req.params.id]);
+      const result = await pool.query("SELECT " + selectCols + " FROM " + table + " WHERE id = $1", [req.params.id]);
       if (!result.rows[0]) return res.status(404).json({ error: "Not found" });
       res.json(result.rows[0]);
     } catch (err) { res.status(500).json({ error: err.message }); }
   });
   router.post("/", authenticate, async (req, res) => {
     try {
-      const fields = Object.keys(req.body).filter((k) => allowedFields.includes(k));
+      const fields = Object.keys(req.body).filter((k) => allowedFields.includes(k) && !adminOnlyFields.includes(k));
       const values = fields.map((f) => req.body[f]);
       const cols = fields.join(", ");
       const placeholders = fields.map((_, i) => "$" + (i + 1)).join(", ");
@@ -169,7 +182,13 @@ function crudRouter(table, allowedFields) {
   });
   router.put("/:id", authenticate, async (req, res) => {
     try {
-      const fields = Object.keys(req.body).filter((k) => allowedFields.includes(k));
+      const isAdmin = req.user.role === "admin";
+      if (requireOwnerOrAdmin && req.user.id !== req.params.id && !isAdmin) {
+        return res.status(403).json({ error: "Forbidden" });
+      }
+      let fields = Object.keys(req.body).filter((k) => allowedFields.includes(k));
+      if (!isAdmin) fields = fields.filter((k) => !adminOnlyFields.includes(k));
+      if (fields.length === 0) return res.status(400).json({ error: "No editable fields provided" });
       const setClauses = fields.map((f, i) => f + " = $" + (i + 1)).join(", ");
       const values = fields.map((f) => req.body[f]);
       values.push(req.params.id);
@@ -243,7 +262,11 @@ app.post("/api/users/:id/submit-kyc", authenticate, async (req, res) => {
   }
 });
 
-app.use("/api/users",          crudRouter("users",          ["email","full_name","role","status","wallet_balance","kyc_status","kyc_bvn","kyc_nin"]));
+app.use("/api/users",          crudRouter("users",          ["email","full_name","role","status","wallet_balance","kyc_status","kyc_bvn","kyc_nin"], {
+  selectColumns: ["id","email","full_name","role","status","created_date","updated_date","wallet_balance","kyc_status","kyc_bvn","kyc_nin","phone","trust_score","trust_level","completed_trades","cancelled_trades","total_disputes","rating_sum","rating_count","risk_score","risk_level","flagged","notification_email","notification_sms","notification_inapp","profile_public","show_email"],
+  adminOnlyFields: ["role","status","wallet_balance","kyc_status"],
+  requireOwnerOrAdmin: true,
+}));
 app.use("/api/transactions",   crudRouter("transactions",   ["user_id","amount","currency","type","status","reference","description","metadata","trade_id","trade_reference","user_name","fee_collected","direction"]));
 app.use("/api/disputes",       crudRouter("disputes",       ["transaction_id","user_id","reason","status","evidence","resolution","amount"]));
 app.use("/api/payouts",        crudRouter("payouts",        ["user_id","amount","currency","status","bank_account","reference","scheduled_date"]));
@@ -392,10 +415,12 @@ app.post("/api/trades/:id/release-funds", authenticate, async (req, res) => {
     if (trade.fee_payer === "SPLIT_50_50") sellerReceives = amount - fee / 2;
 
     if (trade.seller_id) {
-      await pool.query(
-        "UPDATE users SET wallet_balance = COALESCE(wallet_balance, 0) + $1, updated_date = NOW() WHERE id = $2",
-        [sellerReceives, trade.seller_id]
-      );
+      await creditWallet(trade.seller_id, sellerReceives, {
+        type: "Manual_Release",
+        description: `Funds released for: ${trade.item_name}`,
+        tradeId: trade.id,
+        feeCollected: fee,
+      });
     }
 
     const updated = await pool.query(
@@ -436,20 +461,35 @@ app.post("/api/disputes/:id/resolve", authenticate, async (req, res) => {
     const fee = parseFloat(trade.calculated_fee) || 0;
 
     if (ruling === "refund" && trade.buyer_id) {
-      await pool.query(
-        "UPDATE users SET wallet_balance = COALESCE(wallet_balance, 0) + $1, updated_date = NOW() WHERE id = $2",
-        [amount, trade.buyer_id]
-      );
+      await creditWallet(trade.buyer_id, amount, {
+        type: "Dispute_Refund",
+        description: `Dispute refund for: ${trade.item_name}`,
+        tradeId: trade.id,
+      });
     } else if (ruling === "release" && trade.seller_id) {
       const sellerReceives = trade.fee_payer === "SELLER" ? amount - fee : trade.fee_payer === "SPLIT_50_50" ? amount - fee / 2 : amount;
-      await pool.query(
-        "UPDATE users SET wallet_balance = COALESCE(wallet_balance, 0) + $1, updated_date = NOW() WHERE id = $2",
-        [sellerReceives, trade.seller_id]
-      );
+      await creditWallet(trade.seller_id, sellerReceives, {
+        type: "Dispute_Release",
+        description: `Dispute release for: ${trade.item_name}`,
+        tradeId: trade.id,
+        feeCollected: fee,
+      });
     } else if (ruling === "split") {
       const half = amount / 2;
-      if (trade.buyer_id) await pool.query("UPDATE users SET wallet_balance = COALESCE(wallet_balance, 0) + $1, updated_date = NOW() WHERE id = $2", [half, trade.buyer_id]);
-      if (trade.seller_id) await pool.query("UPDATE users SET wallet_balance = COALESCE(wallet_balance, 0) + $1, updated_date = NOW() WHERE id = $2", [half, trade.seller_id]);
+      if (trade.buyer_id) {
+        await creditWallet(trade.buyer_id, half, {
+          type: "Dispute_Split",
+          description: `Dispute split (buyer share) for: ${trade.item_name}`,
+          tradeId: trade.id,
+        });
+      }
+      if (trade.seller_id) {
+        await creditWallet(trade.seller_id, half, {
+          type: "Dispute_Split",
+          description: `Dispute split (seller share) for: ${trade.item_name}`,
+          tradeId: trade.id,
+        });
+      }
     }
 
     await pool.query(
@@ -537,32 +577,21 @@ async function runAutoRelease() {
         if (trade.fee_payer === "SELLER") sellerReceives = amount - fee;
         if (trade.fee_payer === "SPLIT_50_50") sellerReceives = amount - fee / 2;
 
-        // Credit seller wallet
+        // Credit seller wallet via the ledger — one atomic call replaces
+        // the previous separate wallet UPDATE + manual transaction INSERT.
         if (trade.seller_id) {
-          await pool.query(
-            "UPDATE users SET wallet_balance = COALESCE(wallet_balance, 0) + $1, updated_date = NOW() WHERE id = $2",
-            [sellerReceives, trade.seller_id]
-          );
+          await creditWallet(trade.seller_id, sellerReceives, {
+            type: "Auto_Release_Payout",
+            description: `Auto-released funds for: ${trade.item_name}`,
+            tradeId: trade.id,
+            feeCollected: fee,
+          });
         }
 
         // Update trade status
         await pool.query(
           "UPDATE trades SET status = 'Confirmed', confirmed_at = NOW(), updated_date = NOW() WHERE id = $1",
           [trade.id]
-        );
-
-        // Create transaction record
-        await pool.query(
-          `INSERT INTO transactions 
-           (user_id, trade_id, amount, fee_collected, type, direction, description, status) 
-           VALUES ($1, $2, $3, $4, 'Auto_Release_Payout', 'credit', $5, 'completed')`,
-          [
-            trade.seller_id,
-            trade.id,
-            sellerReceives,
-            fee,
-            `Auto-released funds for: ${trade.item_name}`
-          ]
         );
 
         console.log(`Auto-released trade ${trade.reference} — ₦${sellerReceives} to seller`);
@@ -742,8 +771,8 @@ app.get("/api/profile/:userId", async (req, res) => {
     const result = await pool.query(
       `SELECT 
         id, full_name, email, role, status, kyc_status, trust_score, trust_level,
-        wallet_balance, completed_trades, total_disputes, rating_sum, rating_count,
-        created_date
+        completed_trades, total_disputes, rating_sum, rating_count,
+        created_date, show_email, profile_public
        FROM users WHERE id = $1`,
       [req.params.userId]
     );
@@ -779,7 +808,9 @@ app.get("/api/profile/:userId", async (req, res) => {
     res.json({
       id: user.id,
       full_name: user.full_name,
-      email: user.email,
+      // Only include email if the user has opted in via their privacy
+      // settings — this endpoint is public and unauthenticated.
+      email: user.show_email ? user.email : undefined,
       role: user.role,
       status: user.status,
       kyc_status: user.kyc_status,
@@ -808,6 +839,111 @@ async function createNotification(userId, title, message, type = "info", link = 
     console.error("Failed to create notification:", err.message);
   }
 }
+
+// ─── Wallet Ledger ─────────────────────────────────────────────────────────
+// These are the ONLY functions permitted to mutate users.wallet_balance.
+// Every credit/debit writes an immutable row to `transactions` and updates
+// the balance in the same DB transaction, so the ledger and the cached
+// balance can never drift apart — and debitWallet uses a row lock so two
+// concurrent withdrawal attempts can't both pass the balance check.
+
+async function creditWallet(userId, amount, { type, description, tradeId = null, metadata = null, feeCollected = null }) {
+  if (!userId) throw new Error("creditWallet: userId is required");
+  const amt = parseFloat(amount);
+  if (!(amt > 0)) throw new Error("creditWallet: amount must be a positive number");
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const txn = await client.query(
+      `INSERT INTO transactions (user_id, trade_id, amount, fee_collected, type, direction, description, status, metadata)
+       VALUES ($1, $2, $3, $4, $5, 'credit', $6, 'completed', $7) RETURNING *`,
+      [userId, tradeId, amt, feeCollected, type, description, metadata ? JSON.stringify(metadata) : null]
+    );
+    const updated = await client.query(
+      "UPDATE users SET wallet_balance = COALESCE(wallet_balance, 0) + $1, updated_date = NOW() WHERE id = $2 RETURNING wallet_balance",
+      [amt, userId]
+    );
+    await client.query("COMMIT");
+    return { transaction: txn.rows[0], newBalance: updated.rows[0].wallet_balance };
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch (_) {}
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+async function debitWallet(userId, amount, { type, description, tradeId = null, metadata = null }) {
+  if (!userId) throw new Error("debitWallet: userId is required");
+  const amt = parseFloat(amount);
+  if (!(amt > 0)) throw new Error("debitWallet: amount must be a positive number");
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    const balanceResult = await client.query("SELECT wallet_balance FROM users WHERE id = $1 FOR UPDATE", [userId]);
+    const currentBalance = parseFloat(balanceResult.rows[0]?.wallet_balance) || 0;
+    if (currentBalance < amt) {
+      await client.query("ROLLBACK");
+      throw new Error(`Insufficient balance: available ₦${currentBalance.toLocaleString()}, requested ₦${amt.toLocaleString()}`);
+    }
+    const txn = await client.query(
+      `INSERT INTO transactions (user_id, trade_id, amount, type, direction, description, status, metadata)
+       VALUES ($1, $2, $3, $4, 'debit', $5, 'completed', $6) RETURNING *`,
+      [userId, tradeId, amt, type, description, metadata ? JSON.stringify(metadata) : null]
+    );
+    const updated = await client.query(
+      "UPDATE users SET wallet_balance = wallet_balance - $1, updated_date = NOW() WHERE id = $2 RETURNING wallet_balance",
+      [amt, userId]
+    );
+    await client.query("COMMIT");
+    return { transaction: txn.rows[0], newBalance: updated.rows[0].wallet_balance };
+  } catch (err) {
+    try { await client.query("ROLLBACK"); } catch (_) {}
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
+// Withdraw funds from wallet — the ONLY legitimate way a user's balance
+// can decrease via their own action. Validates KYC threshold, checks
+// sufficient balance atomically (via debitWallet's row lock), and creates
+// the payout + ledger transaction together. Replaces the old client-side
+// flow that computed and pushed the new balance directly.
+app.post("/api/wallet/withdraw", authenticate, async (req, res) => {
+  const { amount, bank, account } = req.body;
+  const amt = parseFloat(amount);
+  if (!amt || amt <= 0) return res.status(400).json({ error: "A valid withdrawal amount is required" });
+  if (!bank || !account) return res.status(400).json({ error: "Bank name and account number are required" });
+
+  try {
+    const userResult = await pool.query("SELECT kyc_status FROM users WHERE id = $1", [req.user.id]);
+    const user = userResult.rows[0];
+    if (!user) return res.status(404).json({ error: "User not found" });
+
+    if (amt > 50000 && user.kyc_status !== "verified") {
+      return res.status(403).json({ error: "KYC verification is required to withdraw above ₦50,000. Please complete identity verification first." });
+    }
+
+    // debitWallet checks the current balance under a row lock and throws
+    // if insufficient — no possibility of a race condition or overdraw.
+    const { newBalance } = await debitWallet(req.user.id, amt, {
+      type: "Withdrawal",
+      description: `Withdrawal to ${bank}`,
+    });
+
+    const payout = await pool.query(
+      "INSERT INTO payouts (user_id, amount, currency, status, bank_account) VALUES ($1, $2, 'NGN', 'pending', $3) RETURNING *",
+      [req.user.id, amt, JSON.stringify({ bank, account })]
+    );
+
+    res.json({ payout: payout.rows[0], wallet_balance: newBalance });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
 
 app.get("/api/notifications", authenticate, async (req, res) => {
   try {

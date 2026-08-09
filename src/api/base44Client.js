@@ -108,6 +108,10 @@ export const DisputeCenter = {
   sendAdminMessage: (id, message) => request("POST", `/disputes/${id}/message`, { message }),
 };
 
+export const WalletAPI = {
+  withdraw: (amount, bank, account) => request("POST", "/wallet/withdraw", { amount, bank, account }),
+};
+
 export const AdminAPI = {
   auditLogs: () => request("GET", "/admin/audit-logs"),
   kycQueue: () => request("GET", "/admin/kyc-queue"),

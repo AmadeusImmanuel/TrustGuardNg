@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { auth, Transaction, Payout, User } from "@/api/base44Client";
+import { auth, Transaction, WalletAPI } from "@/api/base44Client";
 import AppLayout from "@/components/AppLayout";
 import KYCSection from "@/components/wallet/KYCSection";
 import { ArrowDownLeft, ArrowUpRight } from "lucide-react";
@@ -29,17 +29,13 @@ export default function Wallet() {
 
   const handleWithdraw = async (e) => {
     e.preventDefault();
-    const amount = parseFloat(wForm.amount);
-    if (amount > balance) return alert("Insufficient balance");
-    if (amount > 50000 && user.kyc_status !== "verified") {
-      return alert("KYC verification is required to withdraw above ₦50,000. Please complete identity verification first.");
-    }
     setWLoading(true);
     try {
-      await Payout.create({ user_id: user.id, amount, currency: "NGN", status: "pending", bank_account: { bank: wForm.bank, account: wForm.account } });
-      await Transaction.create({ user_id: user.id, amount, type: "Withdrawal", direction: "debit", description: `Withdrawal to ${wForm.bank}`, status: "pending" });
-      await User.update(user.id, { wallet_balance: balance - amount });
-      setUser({ ...user, wallet_balance: balance - amount });
+      // The backend now validates balance and KYC, and atomically creates
+      // both the payout and the ledger transaction — no client-side
+      // balance math or separate calls needed.
+      const result = await WalletAPI.withdraw(wForm.amount, wForm.bank, wForm.account);
+      setUser({ ...user, wallet_balance: result.wallet_balance });
       setShowWithdraw(false);
       setWForm({ amount: "", bank: "", account: "" });
     } catch (err) { alert(err.message); }

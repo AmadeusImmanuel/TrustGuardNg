@@ -86,13 +86,12 @@ export default function TradeDetail() {
     if (!window.confirm("Confirm you have received the item?")) return;
     setActionLoading(true);
     try {
+      // The backend now creates the transaction/ledger record itself,
+      // atomically with the wallet credit — no separate client-side
+      // Transaction.create() call needed (that used to risk a mismatch
+      // between the credited wallet and the recorded ledger entry if this
+      // second request ever failed independently).
       const updated = await tradeActions.releaseFunds(trade.id);
-      await Transaction.create({
-        trade_id: trade.id, user_id: trade.seller_id,
-        amount: trade.fee_payer === "SELLER" ? trade.amount - trade.calculated_fee : trade.fee_payer === "SPLIT_50_50" ? trade.amount - trade.calculated_fee / 2 : trade.amount,
-        fee_collected: trade.calculated_fee, type: "Manual_Release", direction: "credit",
-        description: `Funds released for: ${trade.item_name}`, status: "completed",
-      });
       setTrade(updated);
     } catch (e) { alert(e.message); }
     setActionLoading(false);
