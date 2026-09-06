@@ -1,8 +1,9 @@
 import React, { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { auth, Trade, Transaction, Dispute, tradeActions, tradeSellerActions, request, Reviews, PaystackAPI } from "@/api/base44Client";
+import { auth, Trade, Transaction, Dispute, tradeActions, tradeSellerActions, tradeBuyerActions, request, Reviews, PaystackAPI } from "@/api/base44Client";
 import AppLayout from "@/components/AppLayout";
 import StatusBadge from "@/components/trades/StatusBadge";
+import ShareButton from "@/components/ShareButton";
 import VirtualBankCard from "@/components/trades/VirtualBankCard";
 import AutoReleaseTimer from "@/components/trades/AutoReleaseTimer";
 import TrustBadge from "@/components/TrustBadge";
@@ -107,17 +108,40 @@ export default function TradeDetail() {
     setActionLoading(false);
   };
 
+  const cancelTrade = async () => {
+    if (!window.confirm("Cancel this trade? This cannot be undone.")) return;
+    setActionLoading(true);
+    try {
+      const updated = await tradeBuyerActions.cancel(trade.id);
+      setTrade(updated);
+    } catch (e) { alert(e.message); }
+    setActionLoading(false);
+  };
+
+  const refundTrade = async () => {
+    if (!window.confirm(`Refund ₦${(Number(trade.amount) || 0).toLocaleString()} to the buyer? This cannot be undone.`)) return;
+    setActionLoading(true);
+    try {
+      const updated = await tradeSellerActions.refund(trade.id);
+      setTrade(updated);
+    } catch (e) { alert(e.message); }
+    setActionLoading(false);
+  };
+
   const raiseDispute = async (e) => {
     e.preventDefault();
     setActionLoading(true);
     try {
+      // Server now validates ownership + trade state, creates the dispute,
+      // and flips trade.status to 'Disputed' in one call — no separate
+      // Trade.update needed (and status is no longer settable from the
+      // client on the generic trades route).
       await Dispute.create({
-        transaction_id: trade.id, user_id: user.id,
-        reason: dispForm.description, evidence: { text: dispForm.evidence_text },
-        status: "OPEN", amount: trade.amount,
+        transaction_id: trade.id,
+        reason: dispForm.description || dispForm.evidence_text,
       });
-      const updated = await Trade.update(trade.id, { status: "Disputed" });
-      setTrade(updated);
+      const refreshed = await Trade.get(trade.id);
+      setTrade(refreshed);
       setShowDispute(false);
     } catch (e) { alert(e.message); }
     setActionLoading(false);
@@ -168,7 +192,14 @@ export default function TradeDetail() {
         )}
         <div className="flex items-start justify-between mb-6">
           <div><h1 className="text-2xl font-black text-foreground">{trade.item_name}</h1><p className="text-muted text-sm mt-1">Ref: {trade.reference}</p></div>
-          <StatusBadge status={trade.status} />
+          <div className="flex items-center gap-3">
+            <ShareButton
+              url={`${window.location.origin}/track/${trade.reference}`}
+              title="TrustGuard Trade"
+              text={`Track this TrustGuard escrow trade: ${trade.item_name}`}
+            />
+            <StatusBadge status={trade.status} />
+          </div>
         </div>
 
         {trade.status === "Pending_Acceptance" && isSeller && (
@@ -295,6 +326,16 @@ export default function TradeDetail() {
         <TradeQRCode trade={trade} />
 
         <div className="flex flex-col gap-3">
+          {["Pending_Acceptance", "Awaiting_Payment"].includes(trade.status) && isBuyer && (
+            <button onClick={cancelTrade} disabled={actionLoading} className="flex items-center justify-center gap-2 py-3.5 rounded-full font-semibold text-danger border border-danger/30 bg-danger/10 hover:bg-danger/20 disabled:opacity-60 transition-colors">
+              <XCircle className="w-5 h-5" /> Cancel Trade
+            </button>
+          )}
+          {trade.status === "Funded" && isSeller && (
+            <button onClick={refundTrade} disabled={actionLoading} className="flex items-center justify-center gap-2 py-3.5 rounded-full font-semibold text-danger border border-danger/30 bg-danger/10 hover:bg-danger/20 disabled:opacity-60 transition-colors">
+              <XCircle className="w-5 h-5" /> Refund Buyer
+            </button>
+          )}
           {trade.status === "Shipped" && isBuyer && (
             <>
               <button onClick={confirmDelivery} disabled={actionLoading} className="flex items-center justify-center gap-2 py-3.5 rounded-full text-primary-foreground font-semibold disabled:opacity-60 bg-primary hover:bg-primary-hover transition-colors">

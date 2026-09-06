@@ -1,19 +1,6 @@
 import React from "react";
-
-const services = [
-  { emoji: "📱", title: "Electronics", desc: "Phones, laptops, gadgets" },
-  { emoji: "🚗", title: "Vehicles", desc: "Cars, bikes, spare parts" },
-  { emoji: "🏠", title: "Real Estate", desc: "Rent deposits, land deals" },
-  { emoji: "🧱", title: "Building Materials", desc: "Cement, tiles, iron rods" },
-  { emoji: "💻", title: "Freelancing", desc: "Design, writing, coding" },
-  { emoji: "🎯", title: "Digital Services", desc: "Software, courses, data" },
-  { emoji: "🌍", title: "Import & Export", desc: "International trade" },
-  { emoji: "🌾", title: "Agriculture", desc: "Crops, livestock, feeds" },
-  { emoji: "📦", title: "Wholesale", desc: "Bulk goods, distributors" },
-  { emoji: "🛒", title: "Marketplace", desc: "Jiji, Instagram, WhatsApp" },
-  { emoji: "📋", title: "Contracts", desc: "Business agreements" },
-  { emoji: "👗", title: "Fashion", desc: "Clothing, shoes, bags" },
-];
+import { Link } from "react-router-dom";
+import services from "@/data/services";
 
 export default function Services() {
   return (
@@ -31,12 +18,12 @@ export default function Services() {
           </p>
         </div>
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-          {services.map(({ emoji, title, desc }) => (
-            <div key={title} className="group p-5 rounded-2xl border border-gray-100 hover:border-green-200 bg-white hover:bg-green-50 transition-all duration-300 hover:-translate-y-1 cursor-pointer text-center">
+          {services.map(({ slug, emoji, title, desc }) => (
+            <Link key={slug} to={`/services/${slug}`} className="group p-5 rounded-2xl border border-gray-100 hover:border-green-200 bg-white hover:bg-green-50 transition-all duration-300 hover:-translate-y-1 cursor-pointer text-center block">
               <div className="text-3xl mb-3 group-hover:scale-110 transition-transform inline-block">{emoji}</div>
               <div className="font-bold text-[#0D1F3C] text-sm mb-1">{title}</div>
               <div className="text-gray-400 text-xs">{desc}</div>
-            </div>
+            </Link>
           ))}
         </div>
       </div>

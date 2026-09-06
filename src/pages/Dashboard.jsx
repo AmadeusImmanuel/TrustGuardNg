@@ -7,11 +7,12 @@ import MetricCard from "@/components/ui/MetricCard";
 import StatusBadge from "@/components/ui/StatusBadge";
 import QuickAction from "@/components/ui/QuickAction";
 import TrustBadge from "@/components/TrustBadge";
+import ShareButton from "@/components/ShareButton";
 import { AreaChart, Area, ResponsiveContainer, Tooltip, XAxis } from "recharts";
 import {
   Wallet, ArrowLeftRight, AlertTriangle, TrendingUp,
   Plus, Shield, ChevronRight,
-  CheckCircle, Clock, Zap
+  CheckCircle, Clock, Zap, Users
 } from "lucide-react";
 
 const CHART_DATA = [
@@ -26,6 +27,7 @@ export default function Dashboard() {
   const [trades, setTrades] = useState([]);
   const [disputes, setDisputes] = useState([]);
   const [reputation, setReputation] = useState(null);
+  const [referralCount, setReferralCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
@@ -41,6 +43,7 @@ export default function Dashboard() {
         setTrades(t || []);
         setDisputes(d || []);
         request("GET", `/users/${u.id}/reputation`).then(r => { if (mounted) setReputation(r); }).catch(() => {});
+        request("GET", "/users/me/referral-count").then(r => { if (mounted) setReferralCount(r.count || 0); }).catch(() => {});
       } catch (e) { console.error(e); }
       if (mounted) setLoading(false);
     })();
@@ -65,16 +68,25 @@ export default function Dashboard() {
               </h1>
               <p className="text-muted text-sm mt-1">Here's what's happening with your escrow account.</p>
             </div>
-            {reputation && (
-              <div className="hidden md:block">
-                <TrustBadge level={reputation.level} score={reputation.score} size="sm" showScore />
-              </div>
-            )}
+            <div className="flex items-center gap-3">
+              {user?.id && (
+                <ShareButton
+                  url={`${window.location.origin}/register?ref=${user.id}`}
+                  title="Join me on TrustGuard Nigeria"
+                  text="Trade safely with escrow protection on TrustGuard Nigeria — join me:"
+                />
+              )}
+              {reputation && (
+                <div className="hidden md:block">
+                  <TrustBadge level={reputation.level} score={reputation.score} size="sm" showScore />
+                </div>
+              )}
+            </div>
           </div>
         </motion.div>
 
         {/* KPI Cards */}
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+        <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
           <MetricCard icon={Wallet} label="Wallet Balance" value={fmt(user?.wallet_balance || 0)}
             description="Available to withdraw" tone="primary" delay={0} />
           <MetricCard icon={Shield} label="Escrow Total" value={fmt(escrowTotal)}
@@ -83,6 +95,8 @@ export default function Dashboard() {
             description="Successful trades" tone="success" delay={0.1} />
           <MetricCard icon={AlertTriangle} label="Disputes" value={disputes.length}
             description="Total raised" tone="danger" delay={0.15} />
+          <MetricCard icon={Users} label="Referred" value={referralCount}
+            description="Joined via your link" tone="info" delay={0.2} />
         </div>
 
         {/* Main grid */}

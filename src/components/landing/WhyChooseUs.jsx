@@ -3,13 +3,13 @@ import { Shield, Zap, Users, Lock, AlertTriangle, Bell, Star, TrendingUp, Clock,
 
 const features = [
   { icon: Shield, title: "Secure Escrow", desc: "Funds held in a secure escrow account — released only when you confirm delivery.", color: "#00A651" },
-  { icon: Zap, title: "AI Fraud Detection", desc: "Our system flags suspicious transactions, fake accounts, and scam patterns in real time.", color: "#2563eb" },
-  { icon: Users, title: "Verified Users", desc: "Multi-level KYC verification with NIN, BVN, and business registration checks.", color: "#7c3aed" },
-  { icon: Lock, title: "Encrypted Payments", desc: "AES-256 encryption on all transactions. Bank-grade security on every trade.", color: "#dc2626" },
-  { icon: AlertTriangle, title: "Fast Dispute Resolution", desc: "Admin-mediated disputes resolved within 24-48 hours with full evidence review.", color: "#d97706" },
+  { icon: Zap, title: "Smart Fraud Detection", desc: "Our system flags suspicious transactions, unusual trade velocity, and risk patterns in real time.", color: "#2563eb" },
+  { icon: Users, title: "Verified Users", desc: "KYC verification with live BVN checks, so you know who you're trading with.", color: "#7c3aed" },
+  { icon: Lock, title: "Encrypted Payments", desc: "Bank-grade TLS encryption on every trade, with passwords protected using industry-standard hashing.", color: "#dc2626" },
+  { icon: AlertTriangle, title: "Fast Dispute Resolution", desc: "Admin-mediated disputes with full evidence review — photos, videos, and message history.", color: "#d97706" },
   { icon: TrendingUp, title: "Transaction Tracking", desc: "Real-time status updates from payment received to delivery confirmed.", color: "#059669" },
   { icon: Star, title: "Buyer Protection", desc: "Full refund if seller doesn't ship or item doesn't match description.", color: "#00A651" },
-  { icon: Bell, title: "Real-Time Notifications", desc: "Instant SMS, email, and in-app alerts at every stage of your transaction.", color: "#2563eb" },
+  { icon: Bell, title: "Real-Time Notifications", desc: "Instant email and in-app alerts at every stage of your transaction.", color: "#2563eb" },
   { icon: Clock, title: "Auto-Release Timer", desc: "Agreed auto-release window protects sellers from buyers who ghost after delivery.", color: "#7c3aed" },
   { icon: Headphones, title: "24/7 Customer Support", desc: "Dedicated support team available round the clock for urgent trade issues.", color: "#dc2626" },
 ];

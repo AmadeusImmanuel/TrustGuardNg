@@ -24,8 +24,8 @@ export function AuthProvider({ children }) {
     return u;
   };
 
-  const register = async (email, password, full_name, phone) => {
-    const u = await auth.register(email, password, full_name, phone);
+  const register = async (email, password, full_name, phone, referred_by) => {
+    const u = await auth.register(email, password, full_name, phone, referred_by);
     setUser(u);
     return u;
   };

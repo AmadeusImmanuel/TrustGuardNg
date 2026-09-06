@@ -15,7 +15,12 @@ export async function request(method, path, body) {
     },
     ...(body ? { body: JSON.stringify(body) } : {}),
   });
-  if (res.status === 401) { clearToken(); window.location.href = "/login"; return; }
+  // Only treat 401 as "your session expired" when this request actually
+  // carried a token — e.g. login/register legitimately return 401 for
+  // wrong credentials on requests that never had a token to begin with,
+  // and that should surface as a normal error message, not a silent
+  // redirect that leaves callers reading .token off an undefined result.
+  if (res.status === 401 && token) { clearToken(); window.location.href = "/login"; return; }
   const data = await res.json();
   if (!res.ok) throw new Error(data.error || "Request failed");
   return data;
@@ -33,7 +38,7 @@ function entity(path) {
 
 export const auth = {
   login:          (email, password)            => request("POST", "/auth/login",    { email, password }).then((r) => { setToken(r.token); return r.user; }),
-  register:       (email, password, full_name) => request("POST", "/auth/register", { email, password, full_name }).then((r) => { setToken(r.token); return r.user; }),
+  register:       (email, password, full_name, phone, referred_by) => request("POST", "/auth/register", { email, password, full_name, phone, referred_by }).then((r) => { setToken(r.token); return r.user; }),
   logout:         ()                           => { clearToken(); window.location.href = "/login"; },
   me:             ()                           => request("GET", "/auth/me"),
   forgotPassword: (email)                      => request("POST", "/auth/forgot-password", { email }),
@@ -155,4 +160,9 @@ export const tradeSellerActions = {
   accept: (tradeId) => request("POST", `/trades/${tradeId}/accept`),
   reject: (tradeId, message) => request("POST", `/trades/${tradeId}/reject`, { message }),
   requestModification: (tradeId, message) => request("POST", `/trades/${tradeId}/request-modification`, { message }),
+  refund: (tradeId, reason) => request("POST", `/trades/${tradeId}/refund`, { reason }),
+};
+
+export const tradeBuyerActions = {
+  cancel: (tradeId, reason) => request("POST", `/trades/${tradeId}/cancel`, { reason }),
 };

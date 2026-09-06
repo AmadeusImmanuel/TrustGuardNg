@@ -1,6 +1,6 @@
-import React, { useState } from "react";
-import { Search, CheckCircle, Clock, Package, Banknote, AlertTriangle, XCircle } from "lucide-react";
-import { Link } from "react-router-dom";
+import React, { useEffect, useState } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { Search, CheckCircle, Clock, Package, AlertTriangle, XCircle, ChevronLeft } from "lucide-react";
 import ShareButton from "@/components/ShareButton";
 
 const STATUS_CONFIG = {
@@ -11,46 +11,58 @@ const STATUS_CONFIG = {
   Disputed: { label: "Under Dispute", icon: AlertTriangle, color: "#dc2626", step: 3 },
   Resolved: { label: "Resolved", icon: CheckCircle, color: "#059669", step: 4 },
 };
-
 const STEPS = ["Payment", "Funded", "Shipped", "Confirmed"];
 
-export default function TransactionTracker() {
-  const [ref, setRef] = useState("");
+// Public, unauthenticated tracking page — hits GET /api/trades/track/:reference,
+// which has no `authenticate` middleware, so this is safe to link out to
+// anyone (buyer, seller, or a curious third party with just the reference).
+export default function TrackTransaction() {
+  const { reference: refParam } = useParams();
+  const navigate = useNavigate();
+  const [ref, setRef] = useState(refParam || "");
   const [result, setResult] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const track = async (e) => {
-    e.preventDefault();
-    if (!ref.trim()) return;
+  const track = async (refToUse) => {
+    const r = (refToUse ?? ref).trim();
+    if (!r) return;
     setLoading(true);
     setError("");
     setResult(null);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000/api"}/trades/track/${ref.trim()}`);
+      const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000/api"}/trades/track/${r}`);
       if (!res.ok) throw new Error("Transaction not found");
       const data = await res.json();
       setResult(data);
+      if (r !== refParam) navigate(`/track/${r}`, { replace: true });
     } catch (err) {
       setError("Transaction not found. Please check the reference and try again.");
     }
     setLoading(false);
   };
 
+  useEffect(() => {
+    if (refParam) track(refParam);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refParam]);
+
   const statusInfo = result ? (STATUS_CONFIG[result.status] || STATUS_CONFIG.Awaiting_Payment) : null;
+  const shareUrl = result ? `${window.location.origin}/track/${result.reference}` : "";
 
   return (
-    <section id="tracker" className="py-24 bg-gray-50">
-      <div className="max-w-2xl mx-auto px-6">
-        <div className="text-center mb-12">
-          <div className="inline-block px-4 py-1.5 rounded-full text-sm font-semibold mb-4 text-white" style={{ background: "#0D1F3C" }}>
-            Track Transaction
-          </div>
-          <h2 className="text-4xl font-black text-[#0D1F3C] mb-3">Track Any Transaction</h2>
-          <p className="text-gray-500">Enter a TrustGuard reference number to see the live status.</p>
+    <div className="min-h-screen bg-gray-50">
+      <div className="max-w-2xl mx-auto px-6 py-10">
+        <Link to="/" className="inline-flex items-center gap-1.5 text-sm font-semibold text-gray-500 hover:text-[#0D1F3C] mb-8 transition-colors">
+          <ChevronLeft className="w-4 h-4" /> Back to TrustGuard
+        </Link>
+
+        <div className="text-center mb-10">
+          <h1 className="text-3xl font-black text-[#0D1F3C] mb-2">Track a Transaction</h1>
+          <p className="text-gray-500 text-sm">Enter a TrustGuard reference number to see the live status — no login required.</p>
         </div>
 
-        <form onSubmit={track} className="flex gap-3 mb-8">
+        <form onSubmit={(e) => { e.preventDefault(); track(); }} className="flex gap-3 mb-8">
           <div className="relative flex-1">
             <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
             <input value={ref} onChange={(e) => setRef(e.target.value.toUpperCase())}
@@ -79,22 +91,14 @@ export default function TransactionTracker() {
                   {statusInfo.label}
                 </span>
               </div>
-              <div className="flex items-center justify-between gap-4">
+              <div className="flex items-center justify-between">
                 <div>
                   <h3 className="font-black text-xl text-[#0D1F3C]">{result.item_name}</h3>
                   <p className="text-green-600 font-bold text-lg mt-1">₦{(Number(result.amount) || 0).toLocaleString("en-NG")}</p>
                 </div>
-                <ShareButton
-                  url={`${window.location.origin}/track/${result.reference}`}
-                  title="TrustGuard Transaction"
-                  text={`Track this TrustGuard escrow trade: ${result.item_name}`}
-                />
+                <ShareButton url={shareUrl} title="TrustGuard Transaction" text={`Track this TrustGuard escrow trade: ${result.item_name}`} />
               </div>
-              <Link to={`/track/${result.reference}`} className="inline-block mt-3 text-xs font-semibold text-green-600 hover:underline">
-                Open full tracking page →
-              </Link>
             </div>
-            {/* Progress steps */}
             <div className="p-6">
               <div className="flex items-center justify-between mb-2">
                 {STEPS.map((step, i) => {
@@ -103,15 +107,13 @@ export default function TransactionTracker() {
                   return (
                     <React.Fragment key={step}>
                       <div className="flex flex-col items-center gap-1">
-                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${done ? "text-white" : active ? "text-white" : "bg-gray-100 text-gray-400"}`}
+                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold transition-all ${done || active ? "text-white" : "bg-gray-100 text-gray-400"}`}
                           style={done || active ? { background: done ? "#00A651" : statusInfo.color } : {}}>
                           {done ? "✓" : i + 1}
                         </div>
                         <span className={`text-xs font-medium ${active ? "text-[#0D1F3C]" : "text-gray-400"}`}>{step}</span>
                       </div>
-                      {i < STEPS.length - 1 && (
-                        <div className={`flex-1 h-0.5 mx-2 ${done ? "bg-green-400" : "bg-gray-200"}`} />
-                      )}
+                      {i < STEPS.length - 1 && <div className={`flex-1 h-0.5 mx-2 ${done ? "bg-green-400" : "bg-gray-200"}`} />}
                     </React.Fragment>
                   );
                 })}
@@ -125,6 +127,6 @@ export default function TransactionTracker() {
           </div>
         )}
       </div>
-    </section>
+    </div>
   );
 }

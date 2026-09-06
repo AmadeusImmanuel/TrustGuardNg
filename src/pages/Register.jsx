@@ -1,11 +1,13 @@
 import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "@/lib/AuthContext";
 import { Eye, EyeOff } from "lucide-react";
 
 export default function Register() {
   const { register } = useAuth();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const referredBy = searchParams.get("ref") || null;
   const [form, setForm] = useState({ full_name: "", email: "", phone: "", password: "", confirm: "" });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
@@ -18,7 +20,7 @@ export default function Register() {
     setLoading(true);
     setError("");
     try {
-      await register(form.email, form.password, form.full_name, form.phone);
+      await register(form.email, form.password, form.full_name, form.phone, referredBy);
       navigate("/dashboard");
     } catch (err) {
       setError(err.message || "Registration failed");

@@ -16,6 +16,8 @@ import Register from './pages/Register';
 import ForgotPassword from './pages/ForgotPassword';
 import ResetPassword from './pages/ResetPassword';
 import Landing from './pages/Landing';
+import TrackTransaction from './pages/TrackTransaction';
+import ServiceDetail from './pages/ServiceDetail';
 import Dashboard from './pages/Dashboard';
 import Trades from './pages/Trades';
 import NewTrade from './pages/NewTrade';
@@ -76,6 +78,8 @@ const AuthenticatedApp = () => {
 
       {/* Public */}
       <Route path="/" element={<Landing />} />
+      <Route path="/track/:reference" element={<TrackTransaction />} />
+      <Route path="/services/:slug" element={<ServiceDetail />} />
 
       {/* App */}
       <Route path="/dashboard" element={<Dashboard />} />
